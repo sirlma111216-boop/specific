@@ -1,0 +1,264 @@
+# 생기부 자율·진로 기록 도우미
+
+중·고등학교 교사가 학생의 **자율활동·진로활동 기록을 모으고**, 그 기록을 바탕으로
+**학교생활기록부 창의적 체험활동 특기사항 초안**을 만드는 웹앱입니다.
+
+```
+교사 학급 생성 → 학생 명단 등록(직접/Excel) → 학생 가입 및 명단 연결
+→ 교사 활동 등록 → 학생 당일 소감 작성 → 교사의 활동 선택
+→ 개인정보 제거 → Gemini 생성 → 서버 자동 재검증 → 교사 최종 수정·저장
+```
+
+설치 방법은 **[SETUP.md](./SETUP.md)** 를 보세요.
+
+---
+
+## 이 앱의 원칙
+
+**학생** — 자기 활동을 스스로 기록합니다. 학생에게는 생성형 AI가 제공되지 않고,
+자신이 쓴 기록까지만 볼 수 있습니다.
+
+**교사** — 학생의 실제 기록을 보고 생기부에 반영할 활동을 직접 고릅니다.
+AI 결과를 반드시 검토하고 수정합니다.
+
+**AI** — 학생을 평가하지 않습니다. 학생이 직접 쓴 기록을 가장 중요한 근거로 삼고,
+기록이 없는 활동은 교사가 선택했을 때만 보조적으로 반영합니다.
+학생의 실명·이메일·학번·학교·반·교사명을 받지 않으며, 학생이 하지 않은 구체적 행동을 만들어내지 않습니다.
+**AI는 최종 기록 작성자가 아니라 교사의 작성 보조 도구입니다.**
+
+---
+
+## 기술 구성
+
+| 영역 | 사용 기술 |
+|---|---|
+| 프레임워크 | Next.js 16 (App Router) · React 19 · TypeScript |
+| 스타일 | Tailwind CSS v4 (`design.md` 토큰 기반) |
+| 인증 | Firebase Authentication (이메일/비밀번호) |
+| 데이터 | Cloud Firestore |
+| 생성형 AI | Google Gemini (`gemini-3.6-flash`, 서버 라우트에서만 호출) |
+| 엑셀 | ExcelJS (서버에서 파싱·생성) |
+| 테스트 | Vitest |
+
+---
+
+## 개인정보 보호 설계
+
+| 요구 | 구현 |
+|---|---|
+| 학생은 자기 기록만 본다 | 서버 라우트가 `studentUid` 기준으로만 조회 + Firestore 규칙에서 재차 차단 |
+| 학생은 교사의 특기사항을 볼 수 없다 | `studentRecords`는 규칙상 **교사 본인만** 읽기 가능. 학생은 읽기 권한 자체가 없음 |
+| 교사는 담당 학급만 본다 | 모든 교사 API가 `requireTeacherWithClass()`로 `classId` 일치를 검사 |
+| Gemini에 개인정보를 보내지 않는다 | `sanitizeRecordGenerationPayload()` — allowlist 재구성 → 본문 내 실명·학교명 마스킹 → 금지 키 재귀 제거 → 직렬화 결과 최종 검사(실패 시 호출 중단) |
+| API 키를 노출하지 않는다 | `GEMINI_API_KEY`는 서버 전용. 호출은 `/api/generate-record` 안에서만 |
+| 타입 단계 방어 | `GeminiRequestPayload`에 금지 키가 `never`로 선언되어 있어, 개인정보 필드를 추가하면 컴파일이 깨짐 |
+
+클라이언트 SDK의 Firestore **쓰기는 전면 차단**되어 있고, 모든 쓰기는 서버(Admin SDK)를 거칩니다.
+URL이나 API 요청을 바꿔도 UI 뒤편에서 다시 막힙니다.
+
+---
+
+## 작성 기간 규칙
+
+학생은 **활동 당일에만** 소감을 쓸 수 있습니다. 날짜가 지나면 자동으로 마감되고,
+그 뒤로는 자기가 쓴 내용을 **조회만** 할 수 있습니다.
+
+| 상황 | 학생 화면 | 쓰기 |
+|---|---|---|
+| 활동 날짜 이전 | 보이지 않음 | 불가 |
+| 활동 당일 | 로그인 즉시 작성 화면 | 가능 |
+| 날짜 지남 · 그날 안 씀 | 목록에 `마감`으로 표시 | 불가 |
+| 날짜 지남 · 그날 씀 | 목록에서 내용 조회 | 불가 (수정 불가) |
+| 교사가 `지금 공개` | 날짜와 무관하게 작성 화면 | 가능 |
+| 교사가 `마감` | `마감` | 불가 |
+| 교사가 `다시 열기` | 작성 화면 | 가능 |
+
+결석 등으로 예외가 필요하면 교사가 활동 관리 화면에서 **다시 열기**를 누릅니다.
+
+판정은 `lib/events/phase.ts` 한 곳에 모여 있습니다. 조회용 상태는 `computeEventPhase()`,
+쓰기 허용 여부는 `canWriteNow()`가 결정합니다. 둘을 나눈 이유는, 이미 작성한 학생도
+기간이 지나면 수정할 수 없어야 하기 때문입니다.
+
+---
+
+## 교사의 기록 보완
+
+교사는 학생 상세 화면에서 각 활동의 기록을 **수정**하거나, 기록이 없는 활동에 **직접 입력**할 수 있습니다.
+
+- 학생이 쓴 원문은 절대 덮어쓰지 않습니다. 교사 보완본은 `teacherNotes` 컬렉션에 따로 쌓입니다.
+- **학생 화면에는 언제나 학생 본인이 쓴 원문만** 보입니다. 교사가 고친 내용은 학생에게 노출되지 않습니다.
+- 교사 화면과 AI 생성에는 보완본이 최종 자료로 쓰입니다.
+- 내용을 비우고 저장하면 보완본이 지워져 학생 원문 상태로 돌아갑니다.
+- 아직 **가입하지 않은 학생**에게도 입력할 수 있습니다. (문서 id가 계정이 아니라 명단 기준)
+
+화면에는 출처가 배지로 표시됩니다.
+
+| 배지 | 뜻 |
+|---|---|
+| `학생 기록` | 학생이 쓴 그대로 |
+| `교사 수정` | 학생 원문을 교사가 고침 (`학생 원문 보기`로 원문 확인 가능) |
+| `교사 입력` | 학생 기록 없이 교사가 직접 작성 |
+| `기록 없음` | 아무 기록도 없음 |
+
+병합 규칙은 `lib/events/reflection.ts`의 `mergeReflection()` 한 곳에 있습니다.
+
+---
+
+## AI 생성 규칙
+
+### 활동 우선순위
+
+```
+학생 기록 있음 + 먼저 체크
+  ↓
+학생 기록 있음 + 나중 체크
+  ↓
+학생 기록 없음 + 먼저 체크
+  ↓
+학생 기록 없음 + 나중 체크
+```
+
+목표 글자 수로 반영할 활동 수를 정하고(활동 1건당 약 100자), 모자라면 **학생 기록이 없는 활동부터** 뺍니다.
+무작위 방식에서도 학생 기록이 있는 활동을 먼저 뽑고, 부족할 때만 기록 없는 활동을 채웁니다.
+
+### 서버 재검증 (`lib/record-validator/validate.ts`)
+
+생성 직후 서버에서 6가지를 다시 확인하고, 문제가 있으면 **최대 1회** 수정 생성을 요청합니다.
+(수정본이 더 나빠지면 원래 초안을 유지합니다.)
+
+1. 목표 글자 수 ±5%
+2. 학생 1인칭 표현(`나는`, `내가`, `생각했다` …) 잔존 여부
+3. 생기부 종결어미 — 문장 마지막 글자의 종성이 `ㅁ`인지로 판정 (`~함/~임/~음/~보임/~평가됨`)
+4. 부정 평가 · 근거 없는 과대 평가
+5. 학생 기록 있는 활동이 빠지고 기록 없는 활동만 들어갔는지
+6. 원본에 없는 구체적 성취, 기재 금지 고유명사(대학명·기관명·상호명·강사명)
+
+### 문체
+
+학교생활기록부 기재요령을 따릅니다. 교사 관찰자 시점, `~함/~임/~음` 종결,
+활동 단순 나열 지양, 개별적 특성 중심. 루트의 `record_examples.md`를 선생님 문체로 바꾸면
+그 표현이 일반 규칙보다 우선 적용됩니다.
+
+---
+
+## 프로젝트 구조
+
+```
+app/
+  page.tsx                     역할 선택 랜딩
+  teacher/
+    login|signup/              교사 인증 (가드 없음)
+    (app)/                     교사 앱 — 가드 + 온보딩 강제
+      page.tsx                 대시보드
+      onboarding/              우리 반 등록하기
+      students/                학급 학생 목록
+      students/[rosterId]/     학생 상세 · 특기사항 작성
+      events/                  자율·진로 활동 관리
+  student/
+    login|signup/              학생 인증
+    (app)/
+      page.tsx                 로그인 직후 게이트 (작성할 활동 있으면 바로 이동)
+      today/                   소감 작성 (여러 개면 1/2 순차)
+      records/                 내 기록 (목록 · 달력 토글)
+  api/
+    auth/teacher-signup        가입 코드 검증 후 교사 계정 생성
+    auth/student-signup        명단 정확 일치 시에만 계정 생성·연결
+    me                         역할/학급/온보딩 여부
+    teacher/class              학급 + 명단 생성
+    teacher/roster             학생 추가·삭제
+    teacher/roster/template    엑셀 견본 다운로드
+    teacher/roster/preview     엑셀 파싱(저장 안 함)
+    teacher/students           학급 학생 목록 + 기록 수
+    teacher/students/[id]      학생 상세 (활동 + 소감 + 저장된 특기사항)
+    teacher/events             활동 목록·생성
+    teacher/events/[id]        수정 · 공개 · 마감 · 삭제
+    teacher/records            특기사항 저장
+    generate-record            Gemini 생성 (개인정보 제거 → 생성 → 재검증)
+    student/today              지금 작성할 활동
+    student/responses          소감 저장
+    student/records            내 지난 기록
+
+lib/
+  firebase/       client(브라우저) · admin(서버)
+  auth/           ID 토큰 검증, 역할·학급 권한 가드
+  roster/         정규화(normalize) · 명단 검증(parse-students)
+  excel/          견본 생성 · 업로드 파싱
+  events/         상태 계산(phase) · 기본 안내문
+  gemini/         client · prompt · sanitize · payload-types · examples
+  record-generator/ select(우선순위·무작위) · generate(오케스트레이션)
+  record-validator/ validate(검증 1~6)
+
+components/
+  ui/ auth/ roster/ teacher/ student/
+
+firestore.rules   보안 규칙 (반드시 콘솔에 적용)
+design.md         디자인 시스템 (색상·타이포·radius·여백)
+record_examples.md 생기부 문체 예시 (교사가 교체)
+```
+
+---
+
+## Firestore 컬렉션
+
+| 컬렉션 | 문서 ID | 학생 읽기 | 교사 읽기 |
+|---|---|---|---|
+| `users` | uid | 본인만 | 본인만 |
+| `classes` | 자동 | 소속 학급 | 담당 학급 |
+| `studentRoster` | 자동 | 본인 행만 | 담당 학급 전체 |
+| `events` | 자동 | 소속 학급 | 담당 학급 |
+| `responses` | `{eventId}__{uid}` | **본인 것만** | 담당 학급 |
+| `teacherNotes` | `{eventId}__{rosterId}` | **불가** | 담당 학급 |
+| `studentRecords` | `{rosterId}__{category}` | **불가** | 작성한 교사만 |
+
+쓰기는 모든 컬렉션에서 클라이언트 차단 (서버 Admin SDK만 가능).
+
+---
+
+## 명령어
+
+```bash
+npm run dev        # 개발 서버
+npm run build      # 프로덕션 빌드
+npm start          # 프로덕션 실행
+npm test           # 단위 테스트 (Gemini 호출 없음)
+npm run typecheck  # 타입 검사
+npm run lint       # ESLint
+```
+
+실제 Gemini를 호출하는 통합 테스트는 비용이 발생하므로 기본으로 제외됩니다.
+
+```bash
+RUN_LIVE_GEMINI=1 npx vitest run tests/gemini.live.test.ts
+```
+
+---
+
+## 테스트 커버리지
+
+`npm test` — 91개 통과. 요구사항의 테스트 시나리오와 대응은 다음과 같습니다.
+
+| 시나리오 | 대응 |
+|---|---|
+| 2. Excel 명단 30명 등록 | `tests/excel.test.ts` |
+| 4. 잘못된 학생 정보 | `tests/roster.test.ts` (정규화·불일치) |
+| 8. 학생 기록 우선 | `tests/select.test.ts` |
+| 9. 체크 순서 우선 | `tests/select.test.ts` |
+| 10. 무작위 | `tests/select.test.ts` |
+| 11. 개인정보 미전송 | `tests/sanitize.test.ts`, `tests/generate.test.ts` |
+| 12. 문체 변환 | `tests/validate.test.ts`, `tests/gemini.live.test.ts` |
+| 13. 기록 없는 활동 | `tests/gemini.live.test.ts` |
+| 14. 글자 수 재검증 | `tests/generate.test.ts` |
+| 작성 기간(당일만) | `tests/phase.test.ts` |
+| 교사 기록 보완 | `tests/reflection.test.ts` |
+
+시나리오 1·3·5·6·7·15는 Firebase 연결이 필요해 단위 테스트로 자동화하지 않았고,
+실제 Firebase 프로젝트에 붙여 수동으로 전 구간 확인했습니다.
+
+---
+
+## 알려진 제약
+
+- 교사 1명당 학급 1개입니다. (여러 학급 담당은 MVP 범위 밖)
+- `npm audit`에 exceljs/firebase-admin의 전이 의존성 `uuid` 관련 moderate 경고 4건이 남아 있습니다.
+  `uuid`에 버퍼를 직접 넘기는 경로를 쓰지 않으므로 영향은 없습니다.
+- 학생은 활동 당일이 지나면 자기 소감을 수정할 수 없습니다. 교사가 다시 열어주면 가능합니다.

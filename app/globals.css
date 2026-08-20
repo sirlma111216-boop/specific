@@ -1,0 +1,124 @@
+/* Pretendard = Haas Grotesk의 한글 대응 그로테스크. design.md의 폰트 대체 규칙
+   ("Haas가 없으면 Inter Display, Windows는 Segoe UI로 폴백")을 한글 환경에 맞춰 적용. */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+@import "tailwindcss";
+
+/* ───────────────────────────────────────────────────────────
+   design.md (Airtable-design-analysis) 토큰
+   색상 / radius / spacing 값은 design.md에서 그대로 가져온다.
+   ─────────────────────────────────────────────────────────── */
+@theme {
+  --color-canvas: #ffffff;
+  --color-ink: #181d26;
+  --color-primary: #181d26;
+  --color-primary-active: #0d1218;
+  --color-body: #333840;
+  --color-muted: #41454d;
+  --color-hairline: #dddddd;
+  --color-border-strong: #9297a0;
+  --color-surface-soft: #f8fafc;
+  --color-surface-strong: #e0e2e6;
+  --color-surface-dark: #181d26;
+  --color-surface-dark-elevated: #1d1f25;
+
+  --color-coral: #aa2d00;
+  --color-forest: #0a2e0e;
+  --color-cream: #f5e9d4;
+  --color-peach: #fcab79;
+  --color-mint: #a8d8c4;
+  --color-yellow: #f4d35e;
+  --color-mustard: #d9a441;
+
+  --color-link: #1b61c9;
+  --color-link-active: #1a3866;
+  --color-info: #254fad;
+  --color-info-border: #458fff;
+  --color-success: #006400;
+  --color-success-border: #39bf45;
+
+  --radius-xs: 2px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+
+  --spacing-section: 96px;
+
+  --font-sans:
+    "Pretendard Variable", Pretendard, "Inter Display", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+
+  --text-display-lg: 40px;
+  --text-display-lg--line-height: 1.2;
+  --text-display-md: 32px;
+  --text-display-md--line-height: 1.2;
+  --text-title-lg: 24px;
+  --text-title-lg--line-height: 1.35;
+  --text-title-lg--letter-spacing: 0.12px;
+  --text-title-md: 20px;
+  --text-title-md--line-height: 1.5;
+  --text-title-sm: 18px;
+  --text-title-sm--line-height: 1.4;
+  --text-label-md: 16px;
+  --text-label-md--line-height: 1.4;
+  --text-body-md: 14px;
+  --text-body-md--line-height: 1.45;
+  --text-caption: 14px;
+  --text-caption--line-height: 1.35;
+  --text-caption--letter-spacing: 0.16px;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* 기본 스타일은 반드시 @layer base 안에 둔다.
+   레이어 밖에 쓰면 Tailwind의 utilities 레이어보다 우선순위가 높아져서
+   text-white / font-medium 같은 유틸리티가 먹지 않는다. */
+@layer base {
+  body {
+    background: var(--color-canvas);
+    color: var(--color-body);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    color: var(--color-ink);
+    font-weight: 400; /* design.md: display 급을 굵게 쓰지 않는다 */
+  }
+
+  /* 포커스 링: design.md의 button focus(파란 2px 링) 규칙 */
+  :where(a, button, input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-info-border);
+    outline-offset: 2px;
+  }
+
+  ::placeholder {
+    color: #9297a0;
+  }
+
+  /* 숫자 입력 스피너 제거 */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+}
+
+@layer components {
+  /* design.md의 body line-height 1.25는 라틴 UI 기준이다.
+     여러 줄로 흐르는 한글 본문에는 좁아서 읽히지 않으므로 이 클래스에서만 완화한다. */
+  .prose-ko {
+    line-height: 1.75;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+}
