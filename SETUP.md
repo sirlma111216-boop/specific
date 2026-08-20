@@ -180,7 +180,17 @@ npm start
 
 ---
 
-## 8. 배포 시 주의
+## 8. Vercel 배포
+
+1. GitHub 저장소를 Vercel에서 Import (Framework Preset: Next.js, Root Directory: ./)
+2. **Deploy를 누르기 전에 Environment Variables를 모두 채운다.**
+   `NEXT_PUBLIC_*` 값은 빌드 시점에 코드에 박히므로, 나중에 추가하면 재배포해야 한다.
+3. 함수 리전은 `vercel.json`에서 서울(`icn1`)로 고정되어 있다. Firestore(asia-northeast3)와 같은 지역이라 왕복 지연이 짧고, Gemini 지역 차단도 없다.
+4. 배포 후 **Firebase 콘솔 → Authentication → Settings → 승인된 도메인**에 Vercel 도메인을 추가한다.
+
+---
+
+## 9. 배포 시 주의
 
 - **Cloudflare Workers/Pages에는 이 구성 그대로 올리지 마세요.** 엣지의 아웃바운드 지역이 고정되지 않아
   Gemini API가 간헐적으로 400 지역 오류를 냅니다. 이 경우 `lib/gemini/client.ts`를 Vertex AI 호출로 바꿔야 합니다.
