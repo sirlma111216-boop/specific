@@ -83,6 +83,7 @@ export async function POST(req: Request) {
       teacherId: ctx.uid,
       createdAt: now,
       matchKey,
+      studentCount: parsed.students.length,
     };
 
     const batch = db.batch();
@@ -98,6 +99,8 @@ export async function POST(req: Request) {
         signupStatus: "pending",
         linkedUserId: null,
         createdAt: now,
+        autonomousCount: 0,
+        careerCount: 0,
       };
       batch.set(rosterRef, roster);
     }

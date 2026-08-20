@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { adminDb, COL } from "@/lib/firebase/admin";
 import { badRequest, notFound } from "@/lib/api-error";
 import { requireTeacherWithClass } from "@/lib/auth/server";
@@ -53,9 +54,15 @@ export async function POST(req: Request) {
         signupStatus: "pending",
         linkedUserId: null,
         createdAt: now,
+        autonomousCount: 0,
+        careerCount: 0,
       };
       batch.set(ref, roster);
     }
+    // 목록 화면이 명단 문서를 세지 않아도 되도록 학급 문서에 인원수를 유지한다.
+    batch.update(db.collection(COL.classes).doc(ctx.classId), {
+      studentCount: FieldValue.increment(parsed.students.length),
+    });
     await batch.commit();
 
     return { added: parsed.students.length };
@@ -80,7 +87,12 @@ export async function DELETE(req: Request) {
       throw badRequest("이미 가입한 학생은 명단에서 삭제할 수 없습니다.", "already_linked");
     }
 
-    await ref.delete();
+    const batch = db.batch();
+    batch.delete(ref);
+    batch.update(db.collection(COL.classes).doc(ctx.classId), {
+      studentCount: FieldValue.increment(-1),
+    });
+    await batch.commit();
     return { ok: true };
   });
 }

@@ -47,6 +47,12 @@ export interface ClassDoc {
   createdAt: number;
   /** 학생 가입 매칭용 정규화 키 (공백/구분자 제거) */
   matchKey: string;
+  /**
+   * 명단 인원수(비정규화).
+   * 목록 화면에서 반 전체 문서를 읽지 않기 위해 들고 있다. 명단 추가·삭제 시 갱신.
+   * 예전 데이터에는 없을 수 있으므로 읽는 쪽에서 undefined를 허용한다.
+   */
+  studentCount?: number;
 }
 
 export interface RosterDoc {
@@ -59,6 +65,13 @@ export interface RosterDoc {
   signupStatus: SignupStatus;
   linkedUserId: string | null;
   createdAt: number;
+  /**
+   * 영역별 "기록이 있는 활동 수"(비정규화). 학생 원문이든 교사 보완본이든 하나라도 있으면 1.
+   * 학생 목록에서 반 전체 소감을 읽지 않기 위해 들고 있다.
+   * 소감 저장 / 교사 기록 저장·삭제 시에만 갱신된다.
+   */
+  autonomousCount?: number;
+  careerCount?: number;
 }
 
 export interface EventDoc {
@@ -75,6 +88,8 @@ export interface EventDoc {
   createdAt: number;
   updatedAt: number;
   createdBy: string;
+  /** 이 활동에 소감을 낸 학생 수(비정규화). 활동 목록에서 반 전체 소감을 읽지 않기 위함. */
+  submittedCount?: number;
 }
 
 export interface ResponseDoc {

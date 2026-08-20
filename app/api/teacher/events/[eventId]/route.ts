@@ -65,14 +65,15 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ event
     const { eventId } = await params;
     const { ref } = await loadOwnEvent(ctx.classId, eventId);
 
-    const responses = await adminDb()
-      .collection(COL.responses)
-      .where("eventId", "==", eventId)
-      .limit(1)
-      .get();
-    if (!responses.empty) {
+    // 학생 원문이든 교사 보완본이든 기록이 붙어 있으면 지우지 않는다.
+    // (지우면 학생별 기록 수 카운터가 어긋나기도 한다)
+    const [responses, notes] = await Promise.all([
+      adminDb().collection(COL.responses).where("eventId", "==", eventId).limit(1).get(),
+      adminDb().collection(COL.notes).where("eventId", "==", eventId).limit(1).get(),
+    ]);
+    if (!responses.empty || !notes.empty) {
       throw badRequest(
-        "학생이 작성한 기록이 있는 활동은 삭제할 수 없습니다. 필요하면 마감 처리해주세요.",
+        "기록이 있는 활동은 삭제할 수 없습니다. 필요하면 마감 처리해주세요.",
         "has_responses",
       );
     }

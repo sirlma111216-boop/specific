@@ -4,8 +4,9 @@ import { requireTeacherWithClass } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
 import { DEFAULT_GUIDANCE } from "@/lib/events/defaults";
 import { computeEventPhase } from "@/lib/events/phase";
+import { safeCount } from "@/lib/events/counters";
 import { isValidIsoDate, todayInKST } from "@/lib/utils";
-import type { Category, EventDoc, EventStatus, ResponseDoc } from "@/lib/types";
+import type { Category, ClassDoc, EventDoc, EventStatus } from "@/lib/types";
 
 interface CreateBody {
   category?: string;
@@ -25,18 +26,20 @@ export async function GET(req: Request) {
     const ctx = await requireTeacherWithClass(req);
     const db = adminDb();
 
-    const [eventSnap, responseSnap, rosterSnap] = await Promise.all([
+    // 제출 인원과 학급 인원은 비정규화 값을 쓴다. 반 전체 소감을 훑지 않는다.
+    const [eventSnap, classSnap] = await Promise.all([
       db.collection(COL.events).where("classId", "==", ctx.classId).get(),
-      db.collection(COL.responses).where("classId", "==", ctx.classId).get(),
-      db.collection(COL.roster).where("classId", "==", ctx.classId).get(),
+      db.collection(COL.classes).doc(ctx.classId).get(),
     ]);
 
-    const submitted = new Map<string, number>();
-    responseSnap.forEach((d) => {
-      const r = d.data() as ResponseDoc;
-      if (!r.content?.trim()) return;
-      submitted.set(r.eventId, (submitted.get(r.eventId) ?? 0) + 1);
-    });
+    const klass = classSnap.data() as ClassDoc | undefined;
+    let studentCount = klass?.studentCount;
+    if (studentCount === undefined) {
+      // 예전 학급 문서에는 인원수가 없다. 한 번만 세어 넣고 이후로는 읽지 않는다.
+      const rosterSnap = await db.collection(COL.roster).where("classId", "==", ctx.classId).get();
+      studentCount = rosterSnap.size;
+      await classSnap.ref.update({ studentCount }).catch(() => {});
+    }
 
     const today = todayInKST();
     const events = eventSnap.docs
@@ -44,12 +47,12 @@ export async function GET(req: Request) {
       .sort((a, b) => (a.eventDate === b.eventDate ? b.createdAt - a.createdAt : b.eventDate.localeCompare(a.eventDate)))
       .map((e) => ({
         ...e,
-        submittedCount: submitted.get(e.eventId) ?? 0,
+        submittedCount: safeCount(e.submittedCount),
         // 학생 입장에서 지금 어떤 상태로 보이는지 (개인 제출 여부는 제외)
         phase: computeEventPhase(e.status, e.eventDate, today, false),
       }));
 
-    return { events, studentCount: rosterSnap.size, today };
+    return { events, studentCount, today };
   });
 }
 
@@ -85,6 +88,7 @@ export async function POST(req: Request) {
       createdAt: now,
       updatedAt: now,
       createdBy: ctx.uid,
+      submittedCount: 0,
     };
     await ref.set(doc);
     return { event: doc };

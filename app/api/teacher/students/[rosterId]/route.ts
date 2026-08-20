@@ -29,6 +29,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ rosterId
     const roster = rosterSnap.data() as RosterDoc;
     if (roster.classId !== ctx.classId) throw notFound("학생을 찾을 수 없습니다.");
 
+    // 이전/다음 학생 이동을 위해 명단을 한 번 읽는다.
+    // 앞뒤 한 명만 집는 범위 쿼리로 바꾸면 읽기는 줄지만 Firestore 복합 색인을 따로
+    // 배포해야 한다. 학생당 20여 건 아끼자고 설치 단계를 늘릴 만한 이득이 아니라 그대로 둔다.
     const [eventSnap, responseSnap, noteSnap, recordSnap, classRosterSnap] = await Promise.all([
       db.collection(COL.events).where("classId", "==", ctx.classId).get(),
       db.collection(COL.responses).where("rosterId", "==", rosterId).get(),

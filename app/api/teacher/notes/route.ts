@@ -1,8 +1,10 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { adminDb, COL, noteId } from "@/lib/firebase/admin";
 import { badRequest, notFound } from "@/lib/api-error";
 import { requireTeacherWithClass } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
 import { MAX_REFLECTION_LENGTH } from "@/lib/events/defaults";
+import { materialDelta, rosterCountField } from "@/lib/events/counters";
 import { countCharacters } from "@/lib/utils";
 import type { EventDoc, RosterDoc, TeacherNoteDoc } from "@/lib/types";
 
@@ -47,13 +49,36 @@ export async function POST(req: Request) {
 
     const id = noteId(eventId, rosterId);
     const ref = db.collection(COL.notes).doc(id);
+    const rosterRef = db.collection(COL.roster).doc(rosterId);
+    const countField = rosterCountField(event.category);
+
+    // 카운터 기준은 "학생 원문 + 교사 보완본 중 하나라도 있는가"이므로 양쪽을 본다.
+    const [existing, responseSnap] = await Promise.all([
+      ref.get(),
+      db
+        .collection(COL.responses)
+        .where("rosterId", "==", rosterId)
+        .where("eventId", "==", eventId)
+        .limit(1)
+        .get(),
+    ]);
+    const hadNote = Boolean((existing.data() as TeacherNoteDoc | undefined)?.content?.trim());
+    const hasResponse = responseSnap.docs.some((d) =>
+      Boolean((d.data() as { content?: string }).content?.trim()),
+    );
+
+    const batch = db.batch();
 
     if (content === "") {
-      await ref.delete().catch(() => {});
+      const delta = materialDelta(hadNote || hasResponse, hasResponse);
+      if (existing.exists) batch.delete(ref);
+      if (delta !== 0) {
+        batch.update(rosterRef, { [countField]: FieldValue.increment(delta) });
+      }
+      await batch.commit();
       return { ok: true, removed: true };
     }
 
-    const existing = await ref.get();
     const now = Date.now();
     const doc: TeacherNoteDoc = {
       noteId: id,
@@ -65,7 +90,13 @@ export async function POST(req: Request) {
       createdAt: (existing.data() as TeacherNoteDoc | undefined)?.createdAt ?? now,
       updatedAt: now,
     };
-    await ref.set(doc);
+    batch.set(ref, doc);
+
+    const delta = materialDelta(hadNote || hasResponse, true);
+    if (delta !== 0) {
+      batch.update(rosterRef, { [countField]: FieldValue.increment(delta) });
+    }
+    await batch.commit();
 
     return { ok: true, note: doc };
   });
