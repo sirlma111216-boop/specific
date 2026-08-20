@@ -10,7 +10,11 @@ import { formatRecordDate } from "@/lib/utils";
  *         전교 학생자치회 회장(2026.03.01.-2027.02.03.)   ← 학년 단위는 학기 표기 없음
  */
 
-export type OfficerScope = "class" | "grade" | "school";
+/**
+ * 임원 구분.
+ * 기재요령 문구에는 '학년'도 예시로 있으나 실제 학교에 학년 임원 직위는 없어서 넣지 않는다.
+ */
+export type OfficerScope = "class" | "school";
 export type OfficerRole = "president" | "vicePresident";
 /** 학기 단위 선출이면 first/second, 학년(졸업일까지) 단위면 year */
 export type OfficerTermPeriod = "first" | "second" | "year";
@@ -32,7 +36,6 @@ export const OFFICER_PERIOD_LABEL: Record<OfficerTermPeriod, string> = {
 
 export const OFFICER_SCOPE_LABEL: Record<OfficerScope, string> = {
   class: "학급",
-  grade: "학년",
   school: "전교",
 };
 
@@ -47,8 +50,9 @@ export const OFFICER_ROLE_LABEL: Record<OfficerRole, string> = {
  */
 function positionName(scope: OfficerScope, role: OfficerRole): string {
   const roleLabel = OFFICER_ROLE_LABEL[role];
-  if (scope === "class") return `학급${roleLabel}`;
-  return `${OFFICER_SCOPE_LABEL[scope]} 학생자치회 ${roleLabel}`;
+  // 알 수 없는 값이 들어와도 생기부에 "undefined"가 찍히지 않도록 학급으로 본다.
+  if (scope !== "school") return `학급${roleLabel}`;
+  return `전교 학생자치회 ${roleLabel}`;
 }
 
 /** "1학기 학급회장(2026.03.01.-2026.08.18.)" */

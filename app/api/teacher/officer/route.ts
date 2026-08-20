@@ -19,7 +19,7 @@ interface Body {
 }
 
 const PERIODS: OfficerTermPeriod[] = ["first", "second", "year"];
-const SCOPES: OfficerScope[] = ["class", "grade", "school"];
+const SCOPES: OfficerScope[] = ["class", "school"];
 const ROLES: OfficerRole[] = ["president", "vicePresident"];
 
 /**
