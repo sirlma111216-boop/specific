@@ -23,6 +23,16 @@ export function formatDateDots(isoDate: string): string {
   return `${y}.${m}.${d}`;
 }
 
+/**
+ * 생활기록부 표기용 날짜: YYYY-MM-DD → 2026.08.19.
+ * 기재요령의 관례대로 끝에 마침표를 붙인다. (예: 학교폭력예방교육(2026.03.04.))
+ */
+export function formatRecordDate(isoDate: string): string {
+  const [y, m, d] = (isoDate ?? "").split("-");
+  if (!y || !m || !d) return isoDate ?? "";
+  return `${y}.${m}.${d}.`;
+}
+
 /** YYYY-MM-DD → 08.20 */
 export function formatDateShort(isoDate: string): string {
   const [, m, d] = isoDate.split("-");

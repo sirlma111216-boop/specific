@@ -83,6 +83,10 @@ describe.skipIf(!enabled)("Gemini 실호출", () => {
       expect(sent).not.toContain("한빛중학교");
       expect(sent).not.toContain("홍길동");
 
+      // 활동명 뒤 날짜 표기 (기재요령 관례)
+      expect(result.text).toContain("2026.03.12.");
+      expect(result.text).toContain("2026.04.03.");
+
       // 학생 기록이 있는 활동이 반영되었는지
       expect(result.usedEventIds).toContain("a");
       expect(result.usedEventIds).toContain("b");

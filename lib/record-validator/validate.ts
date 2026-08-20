@@ -6,7 +6,8 @@ export type IssueCode =
   | "sentence_ending"
   | "negative_or_overpraise"
   | "reflection_underused"
-  | "fabricated_detail";
+  | "fabricated_detail"
+  | "missing_date";
 
 export interface ValidationIssue {
   code: IssueCode;
@@ -24,6 +25,8 @@ export interface ValidationInput {
     title: string;
     hasStudentReflection: boolean;
     studentReflection: string;
+    /** 생기부 표기 날짜(2026.08.19.). 본문에 들어갔는지 확인하는 데 쓴다. */
+    eventDate?: string;
   }>;
 }
 
@@ -188,6 +191,19 @@ export function validateRecordDraft(input: ValidationInput): ValidationResult {
       code: "fabricated_detail",
       message: `학생 기록에 없는 구체적 행동·성취 또는 기재 금지 표현이 있습니다. (${fabricated.join(", ")})`,
       instruction: `학생이 실제로 작성한 내용에 근거가 없는 표현(${fabricated.join(", ")})을 삭제하라. 대학명·기관명·상호명·강사명은 생활기록부에 기재할 수 없다.`,
+    });
+  }
+
+  // 검증 7 — 활동명 뒤 날짜 표기 (기재요령 관례)
+  // 본문에 언급된 활동만 본다. 분량 때문에 아예 빠진 활동은 여기서 문제 삼지 않는다.
+  const missingDates = events
+    .filter((e) => e.eventDate && mentionsEvent(text, e.title) && !text.includes(e.eventDate))
+    .map((e) => `${e.title}(${e.eventDate})`);
+  if (missingDates.length > 0) {
+    issues.push({
+      code: "missing_date",
+      message: `활동명 뒤 날짜 표기가 빠졌습니다. (${missingDates.join(", ")})`,
+      instruction: `각 활동을 처음 언급할 때 활동명 바로 뒤 괄호 안에 날짜를 넣어라. 예: ${missingDates[0]}에 참여하여 …`,
     });
   }
 

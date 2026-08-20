@@ -10,7 +10,7 @@ import {
   validateRecordDraft,
   type ValidationIssue,
 } from "@/lib/record-validator/validate";
-import { countCharacters } from "@/lib/utils";
+import { countCharacters, formatRecordDate } from "@/lib/utils";
 import type { Category, SelectionMode } from "@/lib/types";
 import { selectEventsForGeneration, type SelectableEvent } from "./select";
 
@@ -66,7 +66,9 @@ export async function generateStudentRecord(
     events: used.map((e) => ({
       title: e.title,
       description: e.description,
-      eventDate: e.eventDate,
+      // 결과에 그대로 쓰일 표기(2026.08.19.)로 넘긴다. 모델이 날짜를 변환하다
+      // 형식을 틀리는 일을 막기 위해 미리 맞춰서 보낸다.
+      eventDate: formatRecordDate(e.eventDate),
       studentReflection: e.studentReflection,
       hasStudentReflection: e.hasStudentReflection,
       teacherSelectionOrder: e.teacherSelectionOrder,
@@ -85,6 +87,7 @@ export async function generateStudentRecord(
     title: e.title,
     hasStudentReflection: e.hasStudentReflection,
     studentReflection: e.studentReflection,
+    eventDate: e.eventDate,
   }));
 
   let result = validateRecordDraft({
