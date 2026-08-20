@@ -1,3 +1,5 @@
+import type { OfficerTerm } from "@/lib/roster/officer";
+
 /** 앱 전체에서 공유하는 도메인 타입. Firestore 문서 모양과 1:1로 맞춘다. */
 
 export type Role = "teacher" | "student";
@@ -72,6 +74,11 @@ export interface RosterDoc {
    */
   autonomousCount?: number;
   careerCount?: number;
+  /**
+   * 자치활동 임원 재임 이력. 자율·자치활동 특기사항의 첫 문장에 쓰인다.
+   * 학기별로 여러 건일 수 있다. (1학기 회장 + 2학기 부회장 등)
+   */
+  officerTerms?: OfficerTerm[];
 }
 
 export interface EventDoc {

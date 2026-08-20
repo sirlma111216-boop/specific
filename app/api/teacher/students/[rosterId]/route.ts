@@ -96,6 +96,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ rosterId
         studentNumber: roster.studentNumber,
         studentName: roster.studentName,
         signupStatus: roster.signupStatus,
+        officerTerms: roster.officerTerms ?? [],
       },
       events,
       records,

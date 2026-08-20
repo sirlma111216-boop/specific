@@ -22,6 +22,8 @@ export interface GenerateRecordInput {
   targetLength: number;
   selectionMode: SelectionMode;
   events: SelectableEvent[];
+  /** 기재요령 형식으로 완성된 임원 재임 표기 (예: 1학기 학급회장(2026.03.01.-2026.08.18.)) */
+  officerTerms?: string[];
   /** 본문에서 가려야 할 실명·학교명·교사명 등 (Gemini로 나가기 전 제거) */
   identifiersToRedact: string[];
 }
@@ -73,6 +75,7 @@ export async function generateStudentRecord(
       hasStudentReflection: e.hasStudentReflection,
       teacherSelectionOrder: e.teacherSelectionOrder,
     })),
+    officerTerms: input.officerTerms ?? [],
     identifiersToRedact: input.identifiersToRedact,
   });
 
@@ -94,6 +97,7 @@ export async function generateStudentRecord(
     text,
     targetLength: input.targetLength,
     events: validationEvents,
+    officerTerms: payload.officerTerms,
   });
 
   let attempts = 0;
@@ -111,6 +115,7 @@ export async function generateStudentRecord(
       text: repaired,
       targetLength: input.targetLength,
       events: validationEvents,
+      officerTerms: payload.officerTerms,
     });
     // 수정본이 더 나빠지면 원본을 유지한다.
     if (repairedResult.issues.length <= result.issues.length) {

@@ -38,6 +38,7 @@ describe("개인정보 제거", () => {
     expect(Object.keys(payload).sort()).toEqual([
       "category",
       "events",
+      "officerTerms",
       "selectionMode",
       "targetLength",
     ]);

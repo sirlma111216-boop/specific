@@ -41,6 +41,16 @@ export function buildSystemInstruction(category: Category, examples: string): st
 - ${CATEGORY_FULL_LABEL[category]}에서는 다음을 중심에 둔다: ${CATEGORY_FOCUS[category]}.
 - 단, 실제 활동 자료·학생 기록과 연결되지 않는 역량을 억지로 붙이지 않는다.
 
+[자치활동 임원 — officerTerms가 비어 있지 않을 때만 적용]
+- 특기사항의 **첫 문장**을 임원 활동으로 시작한다. 다른 활동보다 앞에 둔다.
+- officerTerms의 문자열을 있는 그대로 문장 앞부분에 넣는다. 형식을 바꾸지 말 것.
+  예: "1학기 학급회장(2026.03.01.-2026.08.18.)으로서 급우들의 의견을 고루 수렴하고 …"
+- 임원으로서의 리더십을 서술한다: 책임감, 급우 의견 수렴, 학급 분위기 조성, 솔선수범,
+  의사소통, 갈등 조정, 학급 운영 참여 등에서 실제 자료와 어울리는 것을 고른다.
+- officerTerms가 여러 개면 학기 순서대로 이어서 쓴다.
+- 임원 경력이 없으면(officerTerms가 빈 배열) 임원 이야기를 절대 만들어내지 않는다.
+- 임원이라는 사실 외에 확인되지 않은 구체적 성과(대회 개최, 예산 집행 등)는 지어내지 않는다.
+
 [활동명 뒤에 날짜 표기 — 반드시 지킬 것]
 - 각 활동을 처음 언급할 때 활동명 바로 뒤 괄호 안에 eventDate 값을 그대로 넣는다.
 - 예: "학급임원선거(2026.08.19.)에 참여하여 …", "학교폭력예방교육(2026.03.04.)을 통해 …"
@@ -84,6 +94,11 @@ export function buildUserPrompt(payload: GeminiRequestPayload): string {
   lines.push(
     `1순위 자료(학생이 직접 작성한 활동) ${reflected.length}건, 2순위 자료(학생 기록 없이 교사가 선택한 활동) ${unreflected.length}건.`,
   );
+  if (payload.officerTerms.length > 0) {
+    lines.push(
+      `이 학생은 자치활동 임원이다: ${payload.officerTerms.join(", ")} — 첫 문장을 이 임원 활동으로 시작하라.`,
+    );
+  }
   lines.push("");
   lines.push("[활동 자료 JSON]");
   lines.push(JSON.stringify(payload, null, 2));

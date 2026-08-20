@@ -21,6 +21,8 @@ import type {
 } from "@/lib/types";
 import { CATEGORY_FULL_LABEL } from "@/lib/types";
 import { cn, countCharacters, formatDateShort } from "@/lib/utils";
+import { OfficerEditor } from "@/components/teacher/officer-editor";
+import type { OfficerTerm } from "@/lib/roster/officer";
 
 interface GenerateResponse {
   text: string;
@@ -65,11 +67,13 @@ export function RecordWorkspace({
   category,
   events,
   savedRecord,
+  officerTerms,
 }: {
   rosterId: string;
   category: Category;
   events: TeacherEventWithResponse[];
   savedRecord?: StudentRecordDoc;
+  officerTerms: OfficerTerm[];
 }) {
   // 교사가 기록을 고치면 즉시 반영되도록 목록을 로컬 상태로 들고 있는다.
   const [items, setItems] = useState(events);
@@ -355,6 +359,11 @@ export function RecordWorkspace({
 
       {/* 생성 패널 */}
       <section className="lg:sticky lg:top-6 lg:self-start">
+        {/* 임원 재임은 자치활동이므로 자율 영역에서만 입력받는다 */}
+        {category === "autonomous" && (
+          <OfficerEditor rosterId={rosterId} initial={officerTerms} />
+        )}
+
         <Card className="p-5">
           <h2 className="mb-5 text-[18px] font-medium text-ink">특기사항 생성</h2>
 

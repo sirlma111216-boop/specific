@@ -15,6 +15,7 @@ import {
   type TeacherEventWithResponse,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import type { OfficerTerm } from "@/lib/roster/officer";
 
 interface DetailResponse {
   student: {
@@ -22,6 +23,7 @@ interface DetailResponse {
     studentNumber: number;
     studentName: string;
     signupStatus: SignupStatus;
+    officerTerms: OfficerTerm[];
   };
   events: Record<Category, TeacherEventWithResponse[]>;
   records: Partial<Record<Category, StudentRecordDoc>>;
@@ -132,6 +134,7 @@ export function StudentDetail({ rosterId }: { rosterId: string }) {
         category={tab}
         events={data.events[tab]}
         savedRecord={data.records[tab]}
+        officerTerms={student.officerTerms ?? []}
       />
     </main>
   );

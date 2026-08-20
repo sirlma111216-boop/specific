@@ -6,6 +6,7 @@ import { GeminiError, isGeminiConfigured } from "@/lib/gemini/client";
 import { generateStudentRecord } from "@/lib/record-generator/generate";
 import type { SelectableEvent } from "@/lib/record-generator/select";
 import { MAX_TARGET_LENGTH, MIN_TARGET_LENGTH } from "@/lib/events/defaults";
+import { formatOfficerTerms } from "@/lib/roster/officer";
 import { ApiError } from "@/lib/api-error";
 import type {
   Category,
@@ -115,12 +116,17 @@ export async function POST(req: Request) {
       ctx.email,
     ].filter(Boolean);
 
+    // 임원 재임 표기는 자치활동에 해당하므로 자율 영역에만 넣는다.
+    const officerTerms =
+      category === "autonomous" ? formatOfficerTerms(roster.officerTerms ?? []) : [];
+
     try {
       const result = await generateStudentRecord({
         category,
         targetLength,
         selectionMode,
         events,
+        officerTerms,
         identifiersToRedact,
       });
 

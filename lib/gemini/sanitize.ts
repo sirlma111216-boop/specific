@@ -59,6 +59,8 @@ export interface SanitizeInput {
     hasStudentReflection: boolean;
     teacherSelectionOrder: number;
   }>;
+  /** 이미 기재요령 형식으로 완성된 임원 재임 표기 */
+  officerTerms?: string[];
   /** 본문에서 가려야 할 실명·학교명·교사명 등 */
   identifiersToRedact: string[];
 }
@@ -87,6 +89,8 @@ export function sanitizeRecordGenerationPayload(input: SanitizeInput): GeminiReq
     targetLength: input.targetLength,
     selectionMode: input.selectionMode,
     events,
+    // 임원 표기에도 혹시 모를 식별자가 섞이지 않게 같은 마스킹을 통과시킨다.
+    officerTerms: (input.officerTerms ?? []).map((t) => redactKnownIdentifiers(t, identifiers)),
   });
 
   assertNoPersonalInfo(payload, identifiers);

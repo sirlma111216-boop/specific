@@ -7,7 +7,8 @@ export type IssueCode =
   | "negative_or_overpraise"
   | "reflection_underused"
   | "fabricated_detail"
-  | "missing_date";
+  | "missing_date"
+  | "officer_missing";
 
 export interface ValidationIssue {
   code: IssueCode;
@@ -28,6 +29,8 @@ export interface ValidationInput {
     /** 생기부 표기 날짜(2026.08.19.). 본문에 들어갔는지 확인하는 데 쓴다. */
     eventDate?: string;
   }>;
+  /** 기재요령 형식으로 완성된 임원 재임 표기. 있으면 첫 문장에 나와야 한다. */
+  officerTerms?: string[];
 }
 
 export interface ValidationResult {
@@ -115,6 +118,7 @@ function mentionsEvent(text: string, title: string): boolean {
  */
 export function validateRecordDraft(input: ValidationInput): ValidationResult {
   const { text, targetLength, tolerance = 0.05, events } = input;
+  const officerTerms = input.officerTerms ?? [];
   const issues: ValidationIssue[] = [];
   const characterCount = countCharacters(text);
 
@@ -182,7 +186,9 @@ export function validateRecordDraft(input: ValidationInput): ValidationResult {
   }
 
   // 검증 6 — 원본에 없는 구체적 행동·성취
-  const sourceText = events.map((e) => e.studentReflection ?? "").join(" ");
+  // 임원 재임은 교사가 직접 입력한 확인된 사실이므로 근거 자료에 포함한다.
+  // (이게 없으면 '회장' 같은 단어가 허구 성취로 잘못 걸린다)
+  const sourceText = [...events.map((e) => e.studentReflection ?? ""), ...officerTerms].join(" ");
   const fabricated = [...FABRICATION_MARKERS, ...FORBIDDEN_PROPER_NOUNS].filter(
     (marker) => text.includes(marker) && !sourceText.includes(marker),
   );
@@ -205,6 +211,27 @@ export function validateRecordDraft(input: ValidationInput): ValidationResult {
       message: `활동명 뒤 날짜 표기가 빠졌습니다. (${missingDates.join(", ")})`,
       instruction: `각 활동을 처음 언급할 때 활동명 바로 뒤 괄호 안에 날짜를 넣어라. 예: ${missingDates[0]}에 참여하여 …`,
     });
+  }
+
+  // 검증 8 — 자치활동 임원 표기가 맨 앞에 있는가
+  if (officerTerms.length > 0) {
+    const missing = officerTerms.filter((t) => !text.includes(t));
+    const firstSentence = sentences[0] ?? "";
+    const leadsWithOfficer = officerTerms.some((t) => firstSentence.includes(t));
+
+    if (missing.length > 0) {
+      issues.push({
+        code: "officer_missing",
+        message: `임원 재임 표기가 빠졌습니다. (${missing.join(", ")})`,
+        instruction: `첫 문장을 임원 활동으로 시작하고 다음 표기를 형식 그대로 넣어라: ${missing.join(", ")}`,
+      });
+    } else if (!leadsWithOfficer) {
+      issues.push({
+        code: "officer_missing",
+        message: "임원 재임 표기가 첫 문장에 있지 않습니다.",
+        instruction: `임원 활동을 맨 앞으로 옮겨라. 첫 문장이 "${officerTerms[0]}"으로 시작해야 한다.`,
+      });
+    }
   }
 
   return { ok: issues.length === 0, characterCount, issues };
