@@ -31,6 +31,9 @@ export async function GET() {
       GEMINI_API_KEY: report("GEMINI_API_KEY"),
       GEMINI_MODEL: report("GEMINI_MODEL"),
       TEACHER_SIGNUP_CODE: report("TEACHER_SIGNUP_CODE"),
+      // 관리자 로그인이 안 될 때 원인을 가릴 수 있도록 설정 여부만 노출한다.
+      ADMIN_EMAIL: report("ADMIN_EMAIL"),
+      ADMIN_PASSWORD: report("ADMIN_PASSWORD"),
     },
   });
 }
