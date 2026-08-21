@@ -79,7 +79,12 @@ export function RecordWorkspace({
   const [items, setItems] = useState(events);
 
   // 체크한 순서를 그대로 보존한다. 해제하면 뒤 순번이 자동으로 당겨진다.
-  const [selected, setSelected] = useState<string[]>(savedRecord?.selectedEventIds ?? []);
+  // 관리자가 활동을 지웠을 수 있으므로, 지금 남아 있는 활동만 복원한다.
+  // (없는 id가 남으면 화면에는 안 보이는데 생성 요청에서 오류가 난다)
+  const [selected, setSelected] = useState<string[]>(() => {
+    const alive = new Set(events.map((e) => e.eventId));
+    return (savedRecord?.selectedEventIds ?? []).filter((id) => alive.has(id));
+  });
   const [targetLength, setTargetLength] = useState(
     savedRecord?.targetLength || DEFAULT_TARGET_LENGTH,
   );

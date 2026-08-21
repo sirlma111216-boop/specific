@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { adminDb, COL } from "@/lib/firebase/admin";
 import { badRequest, notFound } from "@/lib/api-error";
 import { requireAdmin } from "@/lib/auth/server";
@@ -11,8 +12,9 @@ import {
   type FormQuestion,
   type QuestionType,
 } from "@/lib/forms/schema";
+import { rosterCountField } from "@/lib/events/counters";
 import { isValidIsoDate } from "@/lib/utils";
-import type { EventDoc, EventStatus } from "@/lib/types";
+import type { EventDoc, EventStatus, ResponseDoc, TeacherNoteDoc } from "@/lib/types";
 
 interface PatchBody {
   title?: string;
@@ -102,25 +104,70 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ eventI
   });
 }
 
-/** 학생 응답이 하나라도 있으면 삭제하지 않는다. */
+/** Firestore 배치 한도(500)를 넘지 않게 나눠서 커밋한다. */
+async function commitInChunks(
+  ops: Array<(batch: FirebaseFirestore.WriteBatch) => void>,
+  size = 400,
+) {
+  const db = adminDb();
+  for (let i = 0; i < ops.length; i += size) {
+    const batch = db.batch();
+    ops.slice(i, i + size).forEach((op) => op(batch));
+    await batch.commit();
+  }
+}
+
+/**
+ * 활동 삭제. 관리자는 학생 응답이 있어도 지울 수 있다.
+ *
+ * 그냥 활동만 지우면 학생 응답·교사 보완본이 주인 없이 남고,
+ * 학생별 기록 수 카운터가 실제와 어긋난다. 그래서 딸린 자료를 함께 정리한다.
+ * 되돌릴 수 없으므로 화면에서 삭제될 응답 수를 알리고 확인을 받는다.
+ */
 export async function DELETE(req: Request, { params }: { params: Promise<{ eventId: string }> }) {
   return route(async () => {
     await requireAdmin(req);
     const { eventId } = await params;
-    const { ref } = await loadEvent(eventId);
+    const { ref, event } = await loadEvent(eventId);
+    const db = adminDb();
 
     const [responses, notes] = await Promise.all([
-      adminDb().collection(COL.responses).where("eventId", "==", eventId).limit(1).get(),
-      adminDb().collection(COL.notes).where("eventId", "==", eventId).limit(1).get(),
+      db.collection(COL.responses).where("eventId", "==", eventId).get(),
+      db.collection(COL.notes).where("eventId", "==", eventId).get(),
     ]);
-    if (!responses.empty || !notes.empty) {
-      throw badRequest(
-        "기록이 있는 활동은 삭제할 수 없습니다. 필요하면 마감 처리해주세요.",
-        "has_responses",
+
+    // 이 활동에 "쓸 기록이 있던" 학생만 카운터를 1 내린다.
+    // 학생 원문과 교사 보완본이 둘 다 있어도 카운터에는 1로 세어져 있다.
+    const rostersWithMaterial = new Set<string>();
+    responses.forEach((d) => {
+      const r = d.data() as ResponseDoc;
+      if (r.content?.trim()) rostersWithMaterial.add(r.rosterId);
+    });
+    notes.forEach((d) => {
+      const n = d.data() as TeacherNoteDoc;
+      if (n.content?.trim()) rostersWithMaterial.add(n.rosterId);
+    });
+
+    const countField = rosterCountField(event.category);
+    const ops: Array<(batch: FirebaseFirestore.WriteBatch) => void> = [];
+    responses.forEach((d) => ops.push((b) => b.delete(d.ref)));
+    notes.forEach((d) => ops.push((b) => b.delete(d.ref)));
+    for (const rosterId of rostersWithMaterial) {
+      ops.push((b) =>
+        b.update(db.collection(COL.roster).doc(rosterId), {
+          [countField]: FieldValue.increment(-1),
+        }),
       );
     }
+    ops.push((b) => b.delete(ref));
 
-    await ref.delete();
-    return { ok: true };
+    await commitInChunks(ops);
+
+    return {
+      ok: true,
+      deletedResponses: responses.size,
+      deletedNotes: notes.size,
+      affectedStudents: rostersWithMaterial.size,
+    };
   });
 }

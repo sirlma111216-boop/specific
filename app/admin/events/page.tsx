@@ -35,6 +35,7 @@ const EMPTY_FORM = {
 export default function AdminEventsPage() {
   const [data, setData] = useState<EventsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
@@ -89,10 +90,27 @@ export default function AdminEventsPage() {
   }
 
   async function remove(event: EventItem) {
-    if (!window.confirm(`'${event.title}' 활동을 삭제할까요?`)) return;
+    // 되돌릴 수 없고 학생 응답까지 함께 지워지므로, 무엇이 사라지는지 분명히 알린다.
+    const warning =
+      event.submittedCount > 0
+        ? `'${event.title}' 활동을 삭제합니다.\n\n` +
+          `학생 응답 ${event.submittedCount}건과 교사가 보완한 기록이 함께 삭제되며, 되돌릴 수 없습니다.\n` +
+          `학생별 자율·진로 기록 수에서도 빠집니다.\n\n` +
+          `그래도 삭제할까요?`
+        : `'${event.title}' 활동을 삭제할까요?`;
+    if (!window.confirm(warning)) return;
+
     setError(null);
     try {
-      await apiFetch(`/api/admin/events/${event.eventId}`, { method: "DELETE" });
+      const res = await apiFetch<{ deletedResponses: number }>(
+        `/api/admin/events/${event.eventId}`,
+        { method: "DELETE" },
+      );
+      setNotice(
+        res.deletedResponses > 0
+          ? `활동을 삭제했습니다. 학생 응답 ${res.deletedResponses}건도 함께 정리했습니다.`
+          : "활동을 삭제했습니다.",
+      );
       reload();
     } catch (err) {
       setError(errorMessage(err));
@@ -117,6 +135,7 @@ export default function AdminEventsPage() {
       </div>
 
       {error && <Alert>{error}</Alert>}
+      {notice && <Alert tone="success">{notice}</Alert>}
 
       {creating && (
         <Card className="mb-8">
@@ -263,11 +282,9 @@ export default function AdminEventsPage() {
                     다시 열기
                   </Button>
                 )}
-                {event.submittedCount === 0 && (
-                  <Button size="sm" variant="danger" onClick={() => remove(event)}>
-                    삭제
-                  </Button>
-                )}
+                <Button size="sm" variant="danger" onClick={() => remove(event)}>
+                  삭제
+                </Button>
               </div>
             </Card>
           ))}
