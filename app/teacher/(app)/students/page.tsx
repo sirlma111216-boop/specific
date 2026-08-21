@@ -15,6 +15,7 @@ interface StudentsResponse {
 export default function TeacherStudentsPage() {
   const [students, setStudents] = useState<StudentListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [rows, setRows] = useState<RosterRow[]>(emptyRows(1));
   const [busy, setBusy] = useState(false);
@@ -61,11 +62,31 @@ export default function TeacherStudentsPage() {
   }
 
   async function removeStudent(item: StudentListItem) {
-    if (!window.confirm(`${item.studentNumber}번 ${item.studentName} 학생을 명단에서 뺄까요?`)) return;
+    const who = `${item.studentNumber}번 ${item.studentName}`;
+    const records = item.autonomousCount + item.careerCount;
+
+    // 되돌릴 수 없고 계정·기록까지 함께 사라지므로 무엇이 지워지는지 분명히 알린다.
+    const lines = [`${who} 학생을 명단에서 뺍니다.`, ""];
+    if (item.signupStatus === "linked") lines.push("· 학생 계정이 삭제되어 더 이상 로그인할 수 없습니다.");
+    if (records > 0) lines.push(`· 활동 기록 ${records}건과 저장된 특기사항이 함께 삭제됩니다.`);
+    lines.push("· 되돌릴 수 없습니다.", "");
+    if (records > 0) lines.push("생기부에 반영할 내용이 있다면 먼저 복사해 두세요.", "");
+    lines.push("계속할까요?");
+
+    if (!window.confirm(lines.join("\n"))) return;
+
+    setError(null);
+    setNotice(null);
     try {
-      await apiFetch(`/api/teacher/roster?rosterId=${encodeURIComponent(item.rosterId)}`, {
-        method: "DELETE",
-      });
+      const res = await apiFetch<{ removedAccount: boolean; deletedResponses: number }>(
+        `/api/teacher/roster?rosterId=${encodeURIComponent(item.rosterId)}`,
+        { method: "DELETE" },
+      );
+      setNotice(
+        res.removedAccount
+          ? `${who} 학생을 명단에서 뺐습니다. 계정과 기록도 함께 정리했습니다.`
+          : `${who} 학생을 명단에서 뺐습니다.`,
+      );
       reload();
     } catch (err) {
       setError(errorMessage(err));
@@ -87,6 +108,7 @@ export default function TeacherStudentsPage() {
       </div>
 
       {error && <Alert>{error}</Alert>}
+      {notice && <Alert tone="success">{notice}</Alert>}
 
       {adding && (
         <Card className="mb-8">
@@ -140,15 +162,13 @@ export default function TeacherStudentsPage() {
                   <td className="px-4 py-3 text-body">{s.autonomousCount}</td>
                   <td className="px-4 py-3 text-body">{s.careerCount}</td>
                   <td className="px-4 py-3 text-right">
-                    {s.signupStatus === "pending" && (
-                      <button
-                        type="button"
-                        onClick={() => removeStudent(s)}
-                        className="text-[13px] text-muted"
-                      >
-                        삭제
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeStudent(s)}
+                      className="text-[13px] text-muted"
+                    >
+                      삭제
+                    </button>
                   </td>
                 </tr>
               ))}

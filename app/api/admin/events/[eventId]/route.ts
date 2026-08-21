@@ -12,6 +12,7 @@ import {
   type FormQuestion,
   type QuestionType,
 } from "@/lib/forms/schema";
+import { commitInChunks } from "@/lib/firebase/batch";
 import { rosterCountField } from "@/lib/events/counters";
 import { isValidIsoDate } from "@/lib/utils";
 import type { EventDoc, EventStatus, ResponseDoc, TeacherNoteDoc } from "@/lib/types";
@@ -102,19 +103,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ eventI
     const event = fresh.data() as EventDoc;
     return { event: { ...event, form: resolveForm(event.form) } };
   });
-}
-
-/** Firestore 배치 한도(500)를 넘지 않게 나눠서 커밋한다. */
-async function commitInChunks(
-  ops: Array<(batch: FirebaseFirestore.WriteBatch) => void>,
-  size = 400,
-) {
-  const db = adminDb();
-  for (let i = 0; i < ops.length; i += size) {
-    const batch = db.batch();
-    ops.slice(i, i + size).forEach((op) => op(batch));
-    await batch.commit();
-  }
 }
 
 /**
