@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { cn, formatDateDots } from "@/lib/utils";
 import { CATEGORY_LABEL, type StudentEventItem } from "@/lib/types";
 import { Badge } from "@/components/ui/surface";
+import { AnswerView } from "@/components/student/answer-view";
 import { emptyRecordText } from "@/lib/events/phase";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -113,9 +114,14 @@ export function RecordCalendar({ items }: { items: StudentEventItem[] }) {
                     </Badge>
                     <span className="text-[15px] font-medium text-ink">{item.title}</span>
                   </div>
-                  <p className="prose-ko mt-3 text-[14px] text-body">
-                    {item.content ?? emptyRecordText(item.phase)}
-                  </p>
+                  <div className="mt-3">
+                    <AnswerView
+                      form={item.form}
+                      answers={item.answers}
+                      fallback={item.content}
+                      emptyText={emptyRecordText(item.phase)}
+                    />
+                  </div>
                 </div>
               ))}
             </div>

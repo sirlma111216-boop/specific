@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Alert, Badge, Card, Spinner } from "@/components/ui/surface";
 import { RecordCalendar } from "@/components/student/record-calendar";
+import { AnswerView } from "@/components/student/answer-view";
 import { apiFetch, errorMessage } from "@/lib/client/api";
 import { emptyRecordText, PHASE_LABEL } from "@/lib/events/phase";
 import { CATEGORY_LABEL, type StudentEventItem } from "@/lib/types";
@@ -109,9 +110,12 @@ export default function StudentRecordsPage() {
                     </button>
                     {open === item.eventId && (
                       <div className="border-t border-hairline bg-surface-soft px-4 py-4">
-                        <p className="prose-ko text-[14px] text-body">
-                          {item.content ?? emptyRecordText(item.phase)}
-                        </p>
+                        <AnswerView
+                          form={item.form}
+                          answers={item.answers}
+                          fallback={item.content}
+                          emptyText={emptyRecordText(item.phase)}
+                        />
                         {item.phase === "writable" && (
                           <Link
                             href="/student/today"

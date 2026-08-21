@@ -1,7 +1,16 @@
 import { adminDb, COL } from "@/lib/firebase/admin";
 import { badRequest, notFound } from "@/lib/api-error";
-import { requireTeacherWithClass } from "@/lib/auth/server";
+import { requireAdmin } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
+import {
+  isChoiceType,
+  MAX_OPTIONS,
+  MAX_QUESTIONS,
+  resolveForm,
+  validateForm,
+  type FormQuestion,
+  type QuestionType,
+} from "@/lib/forms/schema";
 import { isValidIsoDate } from "@/lib/utils";
 import type { EventDoc, EventStatus } from "@/lib/types";
 
@@ -11,25 +20,56 @@ interface PatchBody {
   guidance?: string;
   eventDate?: string;
   status?: string;
+  form?: unknown;
 }
 
 const STATUSES: EventStatus[] = ["scheduled", "open", "closed"];
+const TYPES: QuestionType[] = ["short", "long", "single", "multiple"];
 
-async function loadOwnEvent(classId: string, eventId: string) {
+async function loadEvent(eventId: string) {
   const ref = adminDb().collection(COL.events).doc(eventId);
   const snap = await ref.get();
   if (!snap.exists) throw notFound("활동을 찾을 수 없습니다.");
-  const event = snap.data() as EventDoc;
-  if (event.classId !== classId) throw notFound("활동을 찾을 수 없습니다.");
-  return { ref, event };
+  return { ref, event: snap.data() as EventDoc };
 }
 
-/** 활동 수정 · 지금 공개 · 마감 · 다시 열기 */
+/** 클라이언트가 보낸 양식을 신뢰하지 않고 서버에서 다시 만든다. */
+function sanitizeForm(raw: unknown): FormQuestion[] {
+  if (!Array.isArray(raw)) throw badRequest("양식 형식이 올바르지 않습니다.");
+  if (raw.length > MAX_QUESTIONS) {
+    throw badRequest(`질문은 최대 ${MAX_QUESTIONS}개까지 만들 수 있습니다.`);
+  }
+
+  const questions: FormQuestion[] = raw.map((item, i) => {
+    const q = (item ?? {}) as Partial<FormQuestion>;
+    const type = TYPES.includes(q.type as QuestionType) ? (q.type as QuestionType) : "long";
+    const id = String(q.id ?? "").trim() || `q${i + 1}`;
+    const options = isChoiceType(type)
+      ? (Array.isArray(q.options) ? q.options : [])
+          .map((o) => String(o).trim())
+          .filter(Boolean)
+          .slice(0, MAX_OPTIONS)
+      : [];
+    return {
+      id,
+      type,
+      label: String(q.label ?? "").trim(),
+      required: Boolean(q.required),
+      options,
+    };
+  });
+
+  const errors = validateForm(questions);
+  if (errors.length > 0) throw badRequest(errors.join("\n"), "form_invalid");
+  return questions;
+}
+
+/** 활동 수정 · 양식 저장 · 지금 공개 · 마감 · 다시 열기 */
 export async function PATCH(req: Request, { params }: { params: Promise<{ eventId: string }> }) {
   return route(async () => {
-    const ctx = await requireTeacherWithClass(req);
+    await requireAdmin(req);
     const { eventId } = await params;
-    const { ref } = await loadOwnEvent(ctx.classId, eventId);
+    const { ref } = await loadEvent(eventId);
     const body = await readJson<PatchBody>(req);
 
     const update: Partial<EventDoc> = { updatedAt: Date.now() };
@@ -51,22 +91,24 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ eventI
       }
       update.status = body.status as EventStatus;
     }
+    if (body.form !== undefined) {
+      update.form = sanitizeForm(body.form);
+    }
 
     await ref.update(update);
     const fresh = await ref.get();
-    return { event: fresh.data() as EventDoc };
+    const event = fresh.data() as EventDoc;
+    return { event: { ...event, form: resolveForm(event.form) } };
   });
 }
 
-/** 학생 기록이 하나라도 있으면 삭제하지 않는다. */
+/** 학생 응답이 하나라도 있으면 삭제하지 않는다. */
 export async function DELETE(req: Request, { params }: { params: Promise<{ eventId: string }> }) {
   return route(async () => {
-    const ctx = await requireTeacherWithClass(req);
+    await requireAdmin(req);
     const { eventId } = await params;
-    const { ref } = await loadOwnEvent(ctx.classId, eventId);
+    const { ref } = await loadEvent(eventId);
 
-    // 학생 원문이든 교사 보완본이든 기록이 붙어 있으면 지우지 않는다.
-    // (지우면 학생별 기록 수 카운터가 어긋나기도 한다)
     const [responses, notes] = await Promise.all([
       adminDb().collection(COL.responses).where("eventId", "==", eventId).limit(1).get(),
       adminDb().collection(COL.notes).where("eventId", "==", eventId).limit(1).get(),

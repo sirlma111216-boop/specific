@@ -5,34 +5,25 @@ import { useEffect, useState } from "react";
 import { Alert, Card, Spinner } from "@/components/ui/surface";
 import { apiFetch, errorMessage } from "@/lib/client/api";
 import { useAuth } from "@/lib/client/auth-context";
-import type { EventDoc, StudentListItem } from "@/lib/types";
+import type { StudentListItem } from "@/lib/types";
 import { formatClassName, formatSchoolYear } from "@/lib/utils";
 
 interface StudentsResponse {
   students: StudentListItem[];
 }
-interface EventsResponse {
-  events: Array<EventDoc & { submittedCount: number }>;
-  today: string;
-}
 
 export default function TeacherDashboard() {
   const { profile } = useAuth();
   const [students, setStudents] = useState<StudentListItem[] | null>(null);
-  const [events, setEvents] = useState<EventsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const [s, e] = await Promise.all([
-          apiFetch<StudentsResponse>("/api/teacher/students"),
-          apiFetch<EventsResponse>("/api/teacher/events"),
-        ]);
+        const s = await apiFetch<StudentsResponse>("/api/teacher/students");
         if (!alive) return;
         setStudents(s.students);
-        setEvents(e);
       } catch (err) {
         if (alive) setError(errorMessage(err));
       }
@@ -44,7 +35,6 @@ export default function TeacherDashboard() {
 
   const klass = profile?.klass;
   const linked = students?.filter((s) => s.signupStatus === "linked").length ?? 0;
-  const todayEvents = events?.events.filter((e) => e.eventDate === events.today) ?? [];
 
   return (
     <main>
@@ -62,41 +52,16 @@ export default function TeacherDashboard() {
 
       {students && (
         <>
-          <div className="mb-10 grid gap-4 sm:grid-cols-3">
+          <div className="mb-10 grid gap-4 sm:grid-cols-2">
             <Stat label="학생" value={`${students.length}명`} />
             <Stat label="가입 완료" value={`${linked}명`} sub={`미가입 ${students.length - linked}명`} />
-            <Stat label="등록된 활동" value={`${events?.events.length ?? 0}개`} />
           </div>
 
-          {todayEvents.length > 0 && (
-            <div className="mb-10 rounded-md bg-cream p-6">
-              <h2 className="mb-3 text-[18px] font-medium text-ink">오늘 진행되는 활동</h2>
-              <ul className="space-y-2">
-                {todayEvents.map((e) => (
-                  <li key={e.eventId} className="text-[14px] text-body">
-                    {e.title}
-                    <span className="ml-2 text-muted">
-                      {e.submittedCount}/{students.length}명 작성
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* 실제로 가는 곳이 두 군데뿐이라 카드도 둘로 둔다. */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <NavCard
-              href="/teacher/students"
-              title="학급 학생"
-              body="가입 상태와 활동 기록을 확인하고, 학생을 눌러 생기부 특기사항 초안을 만듭니다."
-            />
-            <NavCard
-              href="/teacher/events"
-              title="자율·진로 활동"
-              body="활동을 등록하고 공개·마감을 제어합니다."
-            />
-          </div>
+          <NavCard
+            href="/teacher/students"
+            title="학급 학생"
+            body="가입 상태와 활동 기록을 확인하고, 학생을 눌러 생기부 특기사항 초안을 만듭니다."
+          />
         </>
       )}
     </main>

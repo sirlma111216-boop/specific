@@ -3,12 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/field";
 import { Alert } from "@/components/ui/surface";
+import { FormAnswerFields } from "@/components/student/form-answer";
 import { apiFetch, errorMessage } from "@/lib/client/api";
-import { MAX_REFLECTION_LENGTH, REFLECTION_PLACEHOLDER } from "@/lib/events/defaults";
+import { resolveForm, validateAnswers, type FormAnswers } from "@/lib/forms/schema";
 import { CATEGORY_FULL_LABEL, type StudentEventItem } from "@/lib/types";
-import { countCharacters, formatDateDots } from "@/lib/utils";
+import { formatDateDots } from "@/lib/utils";
 
 /**
  * 작성할 활동을 하나씩 순서대로 보여준다.
@@ -17,7 +17,8 @@ import { countCharacters, formatDateDots } from "@/lib/utils";
 export function TodayWriter({ today, pending }: { today: string; pending: StudentEventItem[] }) {
   const router = useRouter();
   const [index, setIndex] = useState(0);
-  const [content, setContent] = useState("");
+  const [answers, setAnswers] = useState<FormAnswers>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedStep, setSavedStep] = useState(false);
@@ -26,20 +27,34 @@ export function TodayWriter({ today, pending }: { today: string; pending: Studen
   const event = pending[index];
   if (!event) return null;
 
+  const questions = resolveForm(event.form);
   const isToday = event.eventDate === today;
-  const charCount = countCharacters(content);
+
+  function setAnswer(questionId: string, value: string | string[]) {
+    setAnswers((prev) => ({ ...prev, [questionId]: value }));
+    setFieldErrors((prev) => {
+      if (!prev[questionId]) return prev;
+      const next = { ...prev };
+      delete next[questionId];
+      return next;
+    });
+  }
 
   async function save() {
-    if (!content.trim()) {
-      setError("내용을 입력해주세요.");
+    // 서버와 같은 규칙으로 먼저 확인해 즉시 알려준다.
+    const check = validateAnswers(questions, answers);
+    if (!check.ok) {
+      setFieldErrors(check.errors);
+      setError("답하지 않은 항목이 있습니다.");
       return;
     }
+
     setSaving(true);
     setError(null);
     try {
       await apiFetch("/api/student/responses", {
         method: "POST",
-        body: JSON.stringify({ eventId: event.eventId, content }),
+        body: JSON.stringify({ eventId: event.eventId, answers }),
       });
       setSavedStep(true);
     } catch (err) {
@@ -52,7 +67,8 @@ export function TodayWriter({ today, pending }: { today: string; pending: Studen
   function next() {
     if (index + 1 < total) {
       setIndex(index + 1);
-      setContent("");
+      setAnswers({});
+      setFieldErrors({});
       setSavedStep(false);
       setError(null);
       window.scrollTo({ top: 0 });
@@ -99,19 +115,13 @@ export function TodayWriter({ today, pending }: { today: string; pending: Studen
         </div>
       ) : (
         <div className="mt-6">
-          <Textarea
-            rows={12}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder={REFLECTION_PLACEHOLDER}
-            maxLength={MAX_REFLECTION_LENGTH}
-            aria-label="활동 소감"
-            className="text-[16px]"
+          <FormAnswerFields
+            questions={questions}
+            answers={answers}
+            errors={fieldErrors}
+            onChange={setAnswer}
           />
-          <p className="mt-2 text-right text-[13px] text-muted">
-            {charCount} / {MAX_REFLECTION_LENGTH}자
-          </p>
-          <Button onClick={save} loading={saving} className="mt-4 w-full">
+          <Button onClick={save} loading={saving} className="mt-6 w-full">
             기록 저장하기
           </Button>
         </div>

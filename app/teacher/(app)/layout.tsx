@@ -11,7 +11,6 @@ import { cn, formatClassFull } from "@/lib/utils";
 const NAV = [
   { href: "/teacher", label: "대시보드", exact: true },
   { href: "/teacher/students", label: "학급 학생" },
-  { href: "/teacher/events", label: "자율·진로 활동" },
 ];
 
 export default function TeacherAppLayout({ children }: { children: React.ReactNode }) {
@@ -24,6 +23,10 @@ export default function TeacherAppLayout({ children }: { children: React.ReactNo
     if (loading) return;
     if (!profile) {
       router.replace("/teacher/login");
+      return;
+    }
+    if (profile.role === "admin") {
+      router.replace("/admin");
       return;
     }
     if (profile.role !== "teacher") {

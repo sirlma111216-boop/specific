@@ -2,6 +2,7 @@ import { adminDb, COL } from "@/lib/firebase/admin";
 import { requireStudent } from "@/lib/auth/server";
 import { route } from "@/lib/route-helpers";
 import { computeEventPhase } from "@/lib/events/phase";
+import { resolveForm } from "@/lib/forms/schema";
 import { todayInKST } from "@/lib/utils";
 import type { EventDoc, ResponseDoc, StudentEventItem } from "@/lib/types";
 
@@ -18,7 +19,7 @@ export async function GET(req: Request) {
     const today = todayInKST();
 
     const [eventSnap, mySnap] = await Promise.all([
-      db.collection(COL.events).where("classId", "==", ctx.classId).get(),
+      db.collection(COL.events).get(),
       db.collection(COL.responses).where("studentUid", "==", ctx.uid).get(),
     ]);
 
@@ -43,6 +44,8 @@ export async function GET(req: Request) {
           phase: computeEventPhase(e.status, e.eventDate, today, hasResponse),
           content: mine?.content ?? null,
           updatedAt: mine?.updatedAt ?? null,
+          form: resolveForm(e.form),
+          answers: mine?.answers ?? null,
         };
       })
       // 아직 공개되지 않은 활동은 학생에게 미리 보여주지 않는다.

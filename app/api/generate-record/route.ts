@@ -66,7 +66,7 @@ export async function POST(req: Request) {
 
     const [classSnap, eventSnap, responseSnap, noteSnap] = await Promise.all([
       db.collection(COL.classes).doc(ctx.classId).get(),
-      db.collection(COL.events).where("classId", "==", ctx.classId).get(),
+      db.collection(COL.events).get(),
       db.collection(COL.responses).where("rosterId", "==", rosterId).get(),
       db.collection(COL.notes).where("rosterId", "==", rosterId).get(),
     ]);

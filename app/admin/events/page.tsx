@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
@@ -10,11 +11,16 @@ import { PHASE_LABEL } from "@/lib/events/phase";
 import { CATEGORY_LABEL, type Category, type EventDoc, type EventPhase } from "@/lib/types";
 import { formatDateDots, todayInKST } from "@/lib/utils";
 
-type EventItem = EventDoc & { submittedCount: number; phase: EventPhase };
+type EventItem = EventDoc & {
+  submittedCount: number;
+  questionCount: number;
+  phase: EventPhase;
+};
 
 interface EventsResponse {
   events: EventItem[];
   studentCount: number;
+  classCount: number;
   today: string;
 }
 
@@ -26,14 +32,13 @@ const EMPTY_FORM = {
   guidance: DEFAULT_GUIDANCE,
 };
 
-export default function TeacherEventsPage() {
+export default function AdminEventsPage() {
   const [data, setData] = useState<EventsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState<"all" | Category>("all");
-
   const [reloadToken, setReloadToken] = useState(0);
   const reload = () => setReloadToken((n) => n + 1);
 
@@ -41,7 +46,7 @@ export default function TeacherEventsPage() {
     let alive = true;
     (async () => {
       try {
-        const res = await apiFetch<EventsResponse>("/api/teacher/events");
+        const res = await apiFetch<EventsResponse>("/api/admin/events");
         if (!alive) return;
         setData(res);
         setError(null);
@@ -59,7 +64,7 @@ export default function TeacherEventsPage() {
     setBusy(true);
     setError(null);
     try {
-      await apiFetch("/api/teacher/events", { method: "POST", body: JSON.stringify(form) });
+      await apiFetch("/api/admin/events", { method: "POST", body: JSON.stringify(form) });
       setForm({ ...EMPTY_FORM, category: form.category });
       setCreating(false);
       reload();
@@ -73,7 +78,7 @@ export default function TeacherEventsPage() {
   async function patch(eventId: string, body: Record<string, unknown>) {
     setError(null);
     try {
-      await apiFetch(`/api/teacher/events/${eventId}`, {
+      await apiFetch(`/api/admin/events/${eventId}`, {
         method: "PATCH",
         body: JSON.stringify(body),
       });
@@ -87,7 +92,7 @@ export default function TeacherEventsPage() {
     if (!window.confirm(`'${event.title}' 활동을 삭제할까요?`)) return;
     setError(null);
     try {
-      await apiFetch(`/api/teacher/events/${event.eventId}`, { method: "DELETE" });
+      await apiFetch(`/api/admin/events/${event.eventId}`, { method: "DELETE" });
       reload();
     } catch (err) {
       setError(errorMessage(err));
@@ -101,10 +106,9 @@ export default function TeacherEventsPage() {
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-[32px] leading-[1.2] text-ink">자율·진로 활동</h1>
-          <p className="mt-2 text-[14px] text-muted">
-            학생은 <strong className="text-ink">활동 당일에만</strong> 소감을 쓸 수 있고, 날짜가
-            지나면 자동으로 마감됩니다. 결석 등으로 예외가 필요하면 &lsquo;다시 열기&rsquo;를
-            눌러주세요.
+          <p className="prose-ko mt-2 max-w-[620px] text-[14px] text-muted">
+            여기서 등록한 활동은 <strong className="text-ink">모든 학급 학생</strong>에게 똑같이
+            열립니다. 학생은 활동 당일에만 답할 수 있고, 날짜가 지나면 자동으로 마감됩니다.
           </p>
         </div>
         <Button size="sm" onClick={() => setCreating((v) => !v)}>
@@ -123,9 +127,7 @@ export default function TeacherEventsPage() {
                 <Select
                   id="category"
                   value={form.category}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, category: e.target.value as Category }))
-                  }
+                  onChange={(e) => setForm((p) => ({ ...p, category: e.target.value as Category }))}
                 >
                   <option value="autonomous">자율</option>
                   <option value="career">진로</option>
@@ -177,6 +179,10 @@ export default function TeacherEventsPage() {
                 취소
               </Button>
             </div>
+            <p className="mt-3 text-[13px] text-muted">
+              등록하면 자유 서술 한 칸이 기본 양식으로 들어갑니다. 객관식 등을 넣으려면 등록 후
+              <strong className="text-ink"> 양식 편집</strong>을 누르세요.
+            </p>
           </form>
         </Card>
       )}
@@ -213,6 +219,7 @@ export default function TeacherEventsPage() {
                 <Badge tone={event.phase === "closed" ? "muted" : "neutral"}>
                   {PHASE_LABEL[event.phase]}
                 </Badge>
+                <Badge tone="muted">질문 {event.questionCount}개</Badge>
                 <span className="ml-auto text-[13px] text-muted">
                   {event.submittedCount}/{data.studentCount}명 작성
                 </span>
@@ -222,9 +229,13 @@ export default function TeacherEventsPage() {
                 <p className="prose-ko mt-3 text-[14px] text-body">{event.description}</p>
               )}
 
-              {/* 버튼은 raw status가 아니라 계산된 상태를 따른다.
-                  날짜가 지나 자동 마감된 활동에도 '다시 열기'가 나와야 한다. */}
               <div className="mt-4 flex flex-wrap gap-2">
+                <Link
+                  href={`/admin/events/${event.eventId}`}
+                  className="inline-flex items-center rounded-lg border border-hairline bg-canvas px-4 py-2.5 text-[14px] font-medium text-ink"
+                >
+                  양식 편집
+                </Link>
                 {event.phase === "scheduled" && (
                   <Button
                     size="sm"

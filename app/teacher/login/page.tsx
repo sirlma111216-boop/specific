@@ -14,7 +14,9 @@ export default function TeacherLoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && profile?.role === "teacher") router.replace("/teacher");
+    if (loading || !profile) return;
+    if (profile.role === "admin") router.replace("/admin");
+    else if (profile.role === "teacher") router.replace("/teacher");
   }, [loading, profile, router]);
 
   if (!configured) return <SetupNotice />;

@@ -1,12 +1,13 @@
 import { adminDb, COL } from "@/lib/firebase/admin";
 import { badRequest } from "@/lib/api-error";
-import { requireTeacherWithClass } from "@/lib/auth/server";
+import { requireAdmin } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
 import { DEFAULT_GUIDANCE } from "@/lib/events/defaults";
 import { computeEventPhase } from "@/lib/events/phase";
 import { safeCount } from "@/lib/events/counters";
+import { defaultForm, resolveForm } from "@/lib/forms/schema";
 import { isValidIsoDate, todayInKST } from "@/lib/utils";
-import type { Category, ClassDoc, EventDoc, EventStatus } from "@/lib/types";
+import type { Category, EventDoc, EventStatus } from "@/lib/types";
 
 interface CreateBody {
   category?: string;
@@ -20,45 +21,43 @@ interface CreateBody {
 const CATEGORIES: Category[] = ["autonomous", "career"];
 const STATUSES: EventStatus[] = ["scheduled", "open", "closed"];
 
-/** 교사용 활동 목록. 학생 제출 수를 함께 내려 진행 상황을 볼 수 있게 한다. */
+/** 관리자용 활동 목록. 활동은 학교 전체 공통이라 학급으로 나누지 않는다. */
 export async function GET(req: Request) {
   return route(async () => {
-    const ctx = await requireTeacherWithClass(req);
+    await requireAdmin(req);
     const db = adminDb();
 
-    // 제출 인원과 학급 인원은 비정규화 값을 쓴다. 반 전체 소감을 훑지 않는다.
     const [eventSnap, classSnap] = await Promise.all([
-      db.collection(COL.events).where("classId", "==", ctx.classId).get(),
-      db.collection(COL.classes).doc(ctx.classId).get(),
+      db.collection(COL.events).get(),
+      db.collection(COL.classes).get(),
     ]);
 
-    const klass = classSnap.data() as ClassDoc | undefined;
-    let studentCount = klass?.studentCount;
-    if (studentCount === undefined) {
-      // 예전 학급 문서에는 인원수가 없다. 한 번만 세어 넣고 이후로는 읽지 않는다.
-      const rosterSnap = await db.collection(COL.roster).where("classId", "==", ctx.classId).get();
-      studentCount = rosterSnap.size;
-      await classSnap.ref.update({ studentCount }).catch(() => {});
-    }
+    // 전교생 수는 학급 문서의 인원수를 더해 구한다. (명단을 훑지 않는다)
+    let studentCount = 0;
+    classSnap.forEach((d) => {
+      studentCount += safeCount((d.data() as { studentCount?: number }).studentCount);
+    });
 
     const today = todayInKST();
     const events = eventSnap.docs
       .map((d) => d.data() as EventDoc)
-      .sort((a, b) => (a.eventDate === b.eventDate ? b.createdAt - a.createdAt : b.eventDate.localeCompare(a.eventDate)))
+      .sort((a, b) =>
+        a.eventDate === b.eventDate ? b.createdAt - a.createdAt : b.eventDate.localeCompare(a.eventDate),
+      )
       .map((e) => ({
         ...e,
         submittedCount: safeCount(e.submittedCount),
-        // 학생 입장에서 지금 어떤 상태로 보이는지 (개인 제출 여부는 제외)
+        questionCount: resolveForm(e.form).length,
         phase: computeEventPhase(e.status, e.eventDate, today, false),
       }));
 
-    return { events, studentCount, today };
+    return { events, studentCount, classCount: classSnap.size, today };
   });
 }
 
 export async function POST(req: Request) {
   return route(async () => {
-    const ctx = await requireTeacherWithClass(req);
+    const ctx = await requireAdmin(req);
     const body = await readJson<CreateBody>(req);
 
     const category = body.category as Category;
@@ -78,7 +77,6 @@ export async function POST(req: Request) {
     const now = Date.now();
     const doc: EventDoc = {
       eventId: ref.id,
-      classId: ctx.classId,
       category,
       title,
       description,
@@ -89,6 +87,8 @@ export async function POST(req: Request) {
       updatedAt: now,
       createdBy: ctx.uid,
       submittedCount: 0,
+      // 양식을 따로 만들지 않아도 바로 쓸 수 있도록 자유 서술 한 칸으로 시작한다.
+      form: defaultForm(),
     };
     await ref.set(doc);
     return { event: doc };

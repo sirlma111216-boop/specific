@@ -1,8 +1,9 @@
 import type { OfficerTerm } from "@/lib/roster/officer";
+import type { FormAnswers, FormQuestion } from "@/lib/forms/schema";
 
 /** 앱 전체에서 공유하는 도메인 타입. Firestore 문서 모양과 1:1로 맞춘다. */
 
-export type Role = "teacher" | "student";
+export type Role = "admin" | "teacher" | "student";
 
 /** 창의적 체험활동 영역. MVP는 자율·자치활동 / 진로활동 두 가지만 다룬다. */
 export type Category = "autonomous" | "career";
@@ -81,9 +82,12 @@ export interface RosterDoc {
   officerTerms?: OfficerTerm[];
 }
 
+/**
+ * 활동(이벤트). 관리자가 등록하며 학교 전체 공통이다.
+ * 학급별로 나누지 않으므로 classId가 없다.
+ */
 export interface EventDoc {
   eventId: string;
-  classId: string;
   category: Category;
   title: string;
   description: string;
@@ -95,8 +99,10 @@ export interface EventDoc {
   createdAt: number;
   updatedAt: number;
   createdBy: string;
-  /** 이 활동에 소감을 낸 학생 수(비정규화). 활동 목록에서 반 전체 소감을 읽지 않기 위함. */
+  /** 이 활동에 응답한 학생 수(비정규화) */
   submittedCount?: number;
+  /** 관리자가 만든 응답 양식. 비어 있으면 자유 서술 한 칸이 쓰인다. */
+  form?: FormQuestion[];
 }
 
 export interface ResponseDoc {
@@ -105,6 +111,9 @@ export interface ResponseDoc {
   classId: string;
   studentUid: string;
   rosterId: string;
+  /** 질문 id별 답변 (학생 화면에서 다시 보여줄 때 쓴다) */
+  answers?: FormAnswers;
+  /** 답변을 평문으로 합친 값. 교사 확인·AI 생성은 이 값을 쓴다. */
   content: string;
   createdAt: number;
   updatedAt: number;
@@ -174,6 +183,10 @@ export interface StudentEventItem {
   /** 학생 본인이 작성한 내용. 다른 학생 것은 어떤 경로로도 담기지 않는다. */
   content: string | null;
   updatedAt: number | null;
+  /** 이 활동의 응답 양식 */
+  form: FormQuestion[];
+  /** 본인이 낸 답변 (다시 보여줄 때 사용) */
+  answers: FormAnswers | null;
 }
 
 /** 기록이 어디서 왔는지 */

@@ -3,38 +3,36 @@ import { adminDb, COL, noteId, responseId } from "@/lib/firebase/admin";
 import { badRequest, forbidden, notFound } from "@/lib/api-error";
 import { requireStudent } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
-import { MAX_REFLECTION_LENGTH } from "@/lib/events/defaults";
 import { canWriteNow, isPastDue } from "@/lib/events/phase";
 import { materialDelta, rosterCountField } from "@/lib/events/counters";
-import { countCharacters, todayInKST } from "@/lib/utils";
+import {
+  flattenAnswers,
+  pickKnownAnswers,
+  resolveForm,
+  validateAnswers,
+  type FormAnswers,
+} from "@/lib/forms/schema";
+import { todayInKST } from "@/lib/utils";
 import type { EventDoc, ResponseDoc } from "@/lib/types";
 
 interface Body {
   eventId?: string;
-  content?: string;
+  /** 질문 id별 답변 */
+  answers?: FormAnswers;
 }
 
-/** 학생 소감 저장. 작성 가능한 상태의 활동에만 쓸 수 있다. */
+/** 학생 응답 저장. 작성 가능한 상태의 활동에만 쓸 수 있다. */
 export async function POST(req: Request) {
   return route(async () => {
     const ctx = await requireStudent(req);
     const body = await readJson<Body>(req);
     const eventId = (body.eventId ?? "").trim();
-    const content = (body.content ?? "").trim();
-
     if (!eventId) throw badRequest("활동을 찾을 수 없습니다.");
-    if (!content) throw badRequest("내용을 입력해주세요.");
-    if (countCharacters(content) > MAX_REFLECTION_LENGTH) {
-      throw badRequest(`내용이 너무 깁니다. ${MAX_REFLECTION_LENGTH}자 이내로 작성해주세요.`);
-    }
 
     const db = adminDb();
     const eventSnap = await db.collection(COL.events).doc(eventId).get();
     if (!eventSnap.exists) throw notFound("활동을 찾을 수 없습니다.");
     const event = eventSnap.data() as EventDoc;
-
-    // 다른 학급의 활동에는 쓸 수 없다.
-    if (event.classId !== ctx.classId) throw notFound("활동을 찾을 수 없습니다.");
 
     const today = todayInKST();
 
@@ -51,11 +49,21 @@ export async function POST(req: Request) {
       );
     }
 
+    // 양식은 서버에 저장된 것을 기준으로 검사한다. 클라이언트가 보낸 양식은 믿지 않는다.
+    const form = resolveForm(event.form);
+    const answers = pickKnownAnswers(form, body.answers ?? {});
+    const validation = validateAnswers(form, answers);
+    if (!validation.ok) {
+      throw badRequest("답변을 다시 확인해주세요.", "answers_invalid");
+    }
+
+    const content = flattenAnswers(form, answers);
+    if (!content.trim()) throw badRequest("내용을 입력해주세요.");
+
     const docId = responseId(eventId, ctx.uid);
     const ref = db.collection(COL.responses).doc(docId);
 
     // 카운터를 정확히 올리려면 "이미 이 활동에 자료가 있었는지"를 알아야 한다.
-    // 학생 원문과 교사 보완본 둘 다 확인한다. (문서 2건 읽기)
     const [existing, noteSnap] = await Promise.all([
       ref.get(),
       db.collection(COL.notes).doc(noteId(eventId, ctx.rosterId)).get(),
@@ -71,6 +79,7 @@ export async function POST(req: Request) {
       classId: ctx.classId,
       studentUid: ctx.uid,
       rosterId: ctx.rosterId,
+      answers,
       content,
       createdAt: prev?.createdAt ?? now,
       updatedAt: now,
@@ -85,7 +94,6 @@ export async function POST(req: Request) {
         [rosterCountField(event.category)]: FieldValue.increment(delta),
       });
     }
-    // 활동별 제출 인원은 학생 원문 기준으로만 센다.
     if (!hadResponse) {
       batch.update(db.collection(COL.events).doc(eventId), {
         submittedCount: FieldValue.increment(1),

@@ -51,6 +51,20 @@ export async function requireTeacher(req: Request): Promise<AuthContext> {
   return ctx;
 }
 
+/**
+ * 관리자 전용.
+ * 관리자는 지정된 계정 하나뿐이므로, users 문서의 역할과 ADMIN_EMAIL을 함께 확인한다.
+ * (환경변수가 바뀌면 예전 관리자 계정은 더 이상 통과하지 못한다)
+ */
+export async function requireAdmin(req: Request): Promise<AuthContext> {
+  const ctx = await getAuthContext(req);
+  const adminEmail = (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase();
+  if (ctx.role !== "admin" || !adminEmail || ctx.email.toLowerCase() !== adminEmail) {
+    throw forbidden("관리자만 사용할 수 있습니다.");
+  }
+  return ctx;
+}
+
 /** 학급까지 등록을 마친 교사만 통과. 온보딩 이전에는 막힌다. */
 export async function requireTeacherWithClass(
   req: Request,

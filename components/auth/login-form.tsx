@@ -12,7 +12,7 @@ import { Alert } from "@/components/ui/surface";
 import { translateFirebaseAuthError } from "./auth-shell";
 import type { Role } from "@/lib/types";
 
-const ROLE_LABEL: Record<Role, string> = { teacher: "교사", student: "학생" };
+const ROLE_LABEL: Record<Role, string> = { admin: "관리자", teacher: "교사", student: "학생" };
 
 export function LoginForm({ role, redirectTo }: { role: Role; redirectTo: string }) {
   const router = useRouter();
@@ -22,13 +22,43 @@ export function LoginForm({ role, redirectTo }: { role: Role; redirectTo: string
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  /**
+   * 관리자는 회원가입을 하지 않고 지정된 계정으로만 들어온다.
+   * 계정이 아직 없으면 로그인이 실패하므로, 그때만 서버에 계정 준비를 요청하고 다시 시도한다.
+   * 교사·학생 로그인에는 영향이 없다.
+   */
+  async function signInAllowingAdminBootstrap(mail: string, pw: string) {
+    try {
+      await signInWithEmailAndPassword(clientAuth(), mail, pw);
+    } catch (err) {
+      const code = (err as { code?: string })?.code ?? "";
+      const notFound =
+        code === "auth/user-not-found" || code === "auth/invalid-credential";
+      if (!notFound) throw err;
+      await apiFetch("/api/auth/admin-bootstrap", {
+        method: "POST",
+        body: JSON.stringify({ email: mail, password: pw }),
+      });
+      await signInWithEmailAndPassword(clientAuth(), mail, pw);
+    }
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    const mail = email.trim().toLowerCase();
     try {
-      await signInWithEmailAndPassword(clientAuth(), email.trim().toLowerCase(), password);
+      await signInAllowingAdminBootstrap(mail, password);
       const profile = await apiFetch<Profile>("/api/me");
+
+      // 관리자는 교사 로그인 화면으로 들어오지만 관리자 화면으로 보낸다.
+      if (profile.role === "admin") {
+        await refresh();
+        router.replace("/admin");
+        return;
+      }
+
       // 학생 화면과 교사 화면은 완전히 분리한다. 역할이 다르면 로그인시키지 않는다.
       if (profile.role !== role) {
         await signOut(clientAuth());

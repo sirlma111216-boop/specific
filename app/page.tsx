@@ -13,7 +13,8 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (loading || !profile) return;
-    router.replace(profile.role === "teacher" ? "/teacher" : "/student");
+    if (profile.role === "admin") router.replace("/admin");
+    else router.replace(profile.role === "teacher" ? "/teacher" : "/student");
   }, [loading, profile, router]);
 
   if (!configured) return <SetupNotice />;
