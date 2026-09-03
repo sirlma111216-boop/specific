@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/client/auth-context";
+import { LabbitoryLink } from "@/components/ui/labbitory-link";
 import { SetupNotice } from "@/components/ui/setup-notice";
 import { Spinner } from "@/components/ui/surface";
 
@@ -22,6 +23,7 @@ export default function LandingPage() {
 
   return (
     <main className="mx-auto max-w-[900px] px-6 py-20 sm:py-24">
+      <LabbitoryLink size={40} className="mb-8" />
       <p className="mb-4 text-[14px] font-medium tracking-[0.16px] text-muted">
         창의적 체험활동 · 자율 · 진로
       </p>

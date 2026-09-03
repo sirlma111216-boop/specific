@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/client/auth-context";
+import { LabbitoryLink } from "@/components/ui/labbitory-link";
 import { SetupNotice } from "@/components/ui/setup-notice";
 import { Spinner } from "@/components/ui/surface";
 import { cn } from "@/lib/utils";
@@ -37,9 +38,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="min-h-dvh">
       <header className="border-b border-hairline bg-canvas">
         <div className="mx-auto flex h-16 max-w-[1180px] items-center gap-6 px-6">
-          <Link href="/admin" className="text-[15px] font-medium text-ink whitespace-nowrap">
-            생기부 기록 도우미
-          </Link>
+          <div className="flex items-center gap-3">
+            <LabbitoryLink />
+            <Link href="/admin" className="text-[15px] font-medium text-ink whitespace-nowrap">
+              생기부 기록 도우미
+            </Link>
+          </div>
           <span className="rounded-sm bg-coral px-2 py-0.5 text-[12px] font-medium text-white">
             관리자
           </span>

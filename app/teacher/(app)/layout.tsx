@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/client/auth-context";
+import { LabbitoryLink } from "@/components/ui/labbitory-link";
 import { SetupNotice } from "@/components/ui/setup-notice";
 import { Spinner } from "@/components/ui/surface";
 import { cn, formatClassFull } from "@/lib/utils";
@@ -51,9 +52,12 @@ export default function TeacherAppLayout({ children }: { children: React.ReactNo
     <div className="min-h-dvh">
       <header className="border-b border-hairline bg-canvas">
         <div className="mx-auto flex h-16 max-w-[1180px] items-center gap-6 px-6">
-          <Link href="/teacher" className="text-[15px] font-medium text-ink whitespace-nowrap">
-            생기부 기록 도우미
-          </Link>
+          <div className="flex items-center gap-3">
+            <LabbitoryLink />
+            <Link href="/teacher" className="text-[15px] font-medium text-ink whitespace-nowrap">
+              생기부 기록 도우미
+            </Link>
+          </div>
 
           {!profile.needsOnboarding && (
             <nav className="hidden gap-5 sm:flex">

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/client/auth-context";
+import { LabbitoryLink } from "@/components/ui/labbitory-link";
 import { SetupNotice } from "@/components/ui/setup-notice";
 import { Spinner } from "@/components/ui/surface";
 
@@ -28,9 +29,12 @@ export default function StudentAppLayout({ children }: { children: React.ReactNo
       {/* 학생 화면은 모바일 퍼스트. 헤더는 최소한만 둔다. */}
       <header className="border-b border-hairline bg-canvas">
         <div className="mx-auto flex h-14 max-w-[640px] items-center gap-4 px-5">
-          <Link href="/student" className="text-[15px] font-medium text-ink">
-            내 활동 기록
-          </Link>
+          <div className="flex items-center gap-2.5">
+            <LabbitoryLink size={28} />
+            <Link href="/student" className="text-[15px] font-medium text-ink">
+              내 활동 기록
+            </Link>
+          </div>
           <div className="ml-auto flex items-center gap-4">
             <Link href="/student/records" className="text-[13px] text-muted">
               지난 기록
