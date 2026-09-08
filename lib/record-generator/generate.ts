@@ -40,13 +40,34 @@ export interface GenerateRecordOutput {
   sanitizedPayload: GeminiRequestPayload;
 }
 
-/** 모델이 가끔 붙이는 따옴표/머리말/목록 기호를 떼어낸다. */
+/* 한자 범위. 리터럴로 적으면 파일 저장 과정에서 호환한자(U+F900)가 일반한자로
+   정규화되어 범위가 한글까지 삼킨 적이 있다. 반드시 코드포인트로 적을 것. */
+const HANJA_CLASS = "\\u3400-\\u4DBF\\u4E00-\\u9FFF\\uF900-\\uFAFF";
+/** "진로적성검사(適性檢査)"처럼 한자만 든 괄호. 활동명에 섞여 들어온다. */
+const HANJA_PAREN = new RegExp(`[(（]\\s*[${HANJA_CLASS}\\s·,]+\\s*[)）]`, "gu");
+/** 전각 영문·숫자·기호(U+FF01~U+FF5E)는 ASCII로 그대로 대응된다. */
+const FULLWIDTH_ASCII = new RegExp("[\\uFF01-\\uFF5E]", "gu");
+
+/**
+ * 모델이 가끔 붙이는 따옴표/머리말/목록 기호를 떼어내고,
+ * 확실하게 되돌릴 수 있는 비한글 문자를 한글 표기로 정리한다.
+ *
+ * 한자를 무턱대고 지우면 뜻이 사라지므로, 여기서는 지워도 뜻이 남는 경우
+ * (한자만 든 괄호, ASCII로 1:1 대응되는 전각문자)만 다룬다.
+ * 그래도 남은 한자는 검증 9가 잡아 재생성을 요청한다.
+ */
 export function cleanDraft(raw: string): string {
   let text = raw.trim();
   text = text.replace(/^```[a-z]*\s*/i, "").replace(/```$/, "").trim();
   text = text.replace(/^(특기사항|초안|결과)\s*[:：]\s*/, "");
   text = text.replace(/^["'“”『「]+/, "").replace(/["'“”』」]+$/, "");
   text = text.replace(/^[-•*]\s+/gm, "");
+  // 전각 → ASCII (？ ！ （ ） ０-９ Ａ-Ｚ 등)
+  text = text.replace(FULLWIDTH_ASCII, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+  text = text.replace(/　/g, " ");
+  // 한자만 든 괄호는 통째로 뺀다. "진로적성검사(適性檢査)(2026.03.20.)" → "진로적성검사(2026.03.20.)"
+  text = text.replace(HANJA_PAREN, "");
+  text = text.replace(/\s+([,.)])/g, "$1");
   return text.replace(/[ \t]+\n/g, "\n").trim();
 }
 

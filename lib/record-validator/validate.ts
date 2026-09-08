@@ -8,7 +8,9 @@ export type IssueCode =
   | "reflection_underused"
   | "fabricated_detail"
   | "missing_date"
-  | "officer_missing";
+  | "officer_missing"
+  | "foreign_script"
+  | "observer_voice";
 
 export interface ValidationIssue {
   code: IssueCode;
@@ -57,13 +59,54 @@ const OVERPRAISE_WORDS = [
 ];
 
 /* ── 검증 6: 확인 불가능한 구체적 성취 ──────────────────── */
+// 한국어는 낱말 경계가 없어 부분 일치 오탐이 난다.
+// "전교"는 "안(전교)육"에 걸려, 안전교육이 들어간 기록마다 없는 문제를 만들어냈다.
+// 지어낸 성취를 가리키는 표현만 구체적으로 적는다.
 const FABRICATION_MARKERS = [
   "수상", "최우수", "우수상", "장려상", "대상을", "1위", "우승",
   "대표로", "회장", "부회장", "반장", "부반장",
-  "시범을 보임", "모범이 됨", "또래의 모범", "만점", "자격증", "전교",
+  "시범을 보임", "모범이 됨", "또래의 모범", "만점", "자격증",
+  "전교 회장", "전교회장", "전교 부회장", "전교부회장",
+  "전교 학생회", "전교학생회", "전교 1등", "전교 최상위",
 ];
 /** 학교생활기록부 기재요령상 특기사항에 넣을 수 없는 고유명사류 */
 const FORBIDDEN_PROPER_NOUNS = ["대학교", "주식회사", "㈜", "학원", "강사"];
+
+/* ── 검증 9: 한글이 아닌 문자(한자·가나·전각기호) ────────
+   생활기록부는 한글로 적는다. 한자는 두 갈래로 들어온다.
+   1) 활동명·학생 소감에 한자가 섞여 있으면 모델이 그대로 옮긴다(실측 4/4).
+   2) 모델이 스스로 섞는 경우(실측 38회 중 0건이지만 배제할 수 없다).
+   리터럴 한자를 소스에 적으면 저장 과정에서 호환한자(U+F900)가 일반한자(U+8C48)로
+   정규화되어 범위가 한글(U+AC00~)까지 삼킨다. 반드시 코드포인트로 적을 것. */
+const HANJA_RE = new RegExp("[\\u3400-\\u4DBF\\u4E00-\\u9FFF\\uF900-\\uFAFF]", "gu");
+const KANA_RE = new RegExp("[\\u3040-\\u30FF]", "gu");
+const FULLWIDTH_RE = new RegExp("[\\u3000-\\u303F\\uFF01-\\uFF60]", "gu");
+
+/* ── 검증 10: 교사 관찰자 시점 종결 ──────────────────────
+   '~함/~임/~음'은 종결어미 규칙(검증 3)만 만족시킬 뿐, '인식함/성찰함'처럼
+   학생 관점 서술로도 성립한다. 관찰자 표현이 마지막 문장에만 몰리는 일을 막는다. */
+const OBSERVER_ENDINGS = [
+  "보임",
+  "관찰됨",
+  "평가됨",
+  "나타남",
+  "드러냄",
+  "확인됨",
+  "판단됨",
+  "여겨짐",
+  "기대됨",
+];
+
+/** 교사가 관찰·평가한 서술로 끝나는 문장인지. */
+export function hasObserverEnding(sentence: string): boolean {
+  const s = stripTrailingParenthetical(sentence);
+  return OBSERVER_ENDINGS.some((m) => s.endsWith(m));
+}
+
+/** 문장 수 대비 최소로 필요한 관찰자 시점 종결 문장 수. */
+export function requiredObserverSentences(sentenceCount: number): number {
+  return Math.ceil(sentenceCount / 2);
+}
 
 const HANGUL_BASE = 0xac00;
 const JONG_MIEUM = 16; // 종성 'ㅁ'
@@ -230,6 +273,46 @@ export function validateRecordDraft(input: ValidationInput): ValidationResult {
         code: "officer_missing",
         message: "임원 재임 표기가 첫 문장에 있지 않습니다.",
         instruction: `임원 활동을 맨 앞으로 옮겨라. 첫 문장이 "${officerTerms[0]}"으로 시작해야 한다.`,
+      });
+    }
+  }
+
+  // 검증 9 — 한자·가나·전각기호
+  // 활동명이나 학생 소감에 한자가 있으면 모델이 그대로 옮겨 적는다.
+  // 후처리(cleanDraft)에서 걸러지지 않고 남은 것만 여기서 잡힌다.
+  const foreign = Array.from(
+    new Set([
+      ...(text.match(HANJA_RE) ?? []),
+      ...(text.match(KANA_RE) ?? []),
+      ...(text.match(FULLWIDTH_RE) ?? []),
+    ]),
+  );
+  if (foreign.length > 0) {
+    issues.push({
+      code: "foreign_script",
+      message: `한글이 아닌 문자가 섞여 있습니다. (${foreign.join(" ")})`,
+      instruction: `본문에서 한자·일본어 문자와 전각 기호(${foreign.join(" ")})를 모두 없애고 한글로만 다시 써라. 활동명에 한자가 들어 있으면 한글 부분만 남기고 한자와 그 괄호는 빼라.`,
+    });
+  }
+
+  // 검증 10 — 교사 관찰자 시점 종결이 고르게 쓰였는가
+  // 검증 3(종결어미)은 '인식함/성찰함'처럼 학생 관점 서술도 통과시킨다.
+  // 관찰자 표현이 마지막 문장에만 몰리면 앞·중간이 학생 관점으로 남는다.
+  if (sentences.length >= 2) {
+    const observerFlags = sentences.map((s) => hasObserverEnding(s));
+    const observerCount = observerFlags.filter(Boolean).length;
+    const required = requiredObserverSentences(sentences.length);
+    if (observerCount < required) {
+      const plain = sentences.filter((_, i) => !observerFlags[i]);
+      issues.push({
+        code: "observer_voice",
+        message: `교사 관찰자 시점으로 끝나는 문장이 ${observerCount}/${sentences.length}개뿐입니다. (최소 ${required}개)`,
+        instruction:
+          `학생 관점의 단순 서술('~인식함', '~성찰함', '~이해함', '~함양함')로 끝나는 문장을 교사가 관찰한 서술로 바꿔라. ` +
+          `마지막 문장에만 몰지 말고 첫 문장과 중간 문장에도 고르게 넣어, 전체 ${sentences.length}개 문장 중 최소 ${required}개가 ` +
+          `'~하는 모습을 보임', '~한 것으로 보임', '~태도가 나타남', '~으로 평가됨', '~이 관찰됨' 형태로 끝나게 하라. ` +
+          `예: '중요성을 인식함' → '중요성을 인식하는 모습을 보임', '깊이 성찰함' → '깊이 성찰한 것으로 평가됨'. ` +
+          `특히 다음 문장을 고쳐라: "${plain[0]}".`,
       });
     }
   }
