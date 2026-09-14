@@ -16,7 +16,7 @@ export function AuthShell({
   footer?: ReactNode;
 }) {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-[440px] flex-col justify-center px-6 py-12">
+    <main className="mx-auto flex w-full flex-1 max-w-[440px] flex-col justify-center px-6 py-12">
       <Link href="/" className="mb-10 text-[13px] text-muted">
         ← 처음으로
       </Link>

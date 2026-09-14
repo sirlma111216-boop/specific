@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { SiteFooter } from "@/components/ui/site-footer";
 import { AuthProvider } from "@/lib/client/auth-context";
 
 export const metadata: Metadata = {
@@ -18,8 +19,13 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body>
-        <AuthProvider>{children}</AuthProvider>
+      {/* body를 세로 flex로 두고 본문이 남는 높이를 채워, 내용이 짧아도 푸터가 화면 맨 아래에 붙는다.
+          각 화면의 최상위 요소는 min-h-dvh 대신 flex-1을 쓴다. */}
+      <body className="flex min-h-dvh flex-col">
+        <AuthProvider>
+          <div className="flex flex-1 flex-col">{children}</div>
+        </AuthProvider>
+        <SiteFooter />
       </body>
     </html>
   );

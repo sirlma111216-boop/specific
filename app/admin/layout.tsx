@@ -35,7 +35,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (loading || !profile || profile.role !== "admin") return <Spinner />;
 
   return (
-    <div className="min-h-dvh">
+    <div className="flex-1">
       <header className="border-b border-hairline bg-canvas">
         <div className="mx-auto flex h-16 max-w-[1180px] items-center gap-6 px-6">
           <div className="flex items-center gap-3">

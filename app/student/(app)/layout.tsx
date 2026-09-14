@@ -25,7 +25,7 @@ export default function StudentAppLayout({ children }: { children: React.ReactNo
   if (loading || !profile || profile.role !== "student") return <Spinner />;
 
   return (
-    <div className="min-h-dvh">
+    <div className="flex-1">
       {/* 학생 화면은 모바일 퍼스트. 헤더는 최소한만 둔다. */}
       <header className="border-b border-hairline bg-canvas">
         <div className="mx-auto flex h-14 max-w-[640px] items-center gap-4 px-5">
