@@ -32,8 +32,11 @@ export default function LandingPage() {
         <br />
         특기사항 초안을 만듭니다
       </h1>
-      <p className="prose-ko mt-6 max-w-[520px] text-[16px] text-body">
+      {/* 첫 문장이 데스크톱에서 한 줄에 들어가도록 폭을 둔다. 520px이면 '만듭니다'가 다음 줄로 밀린다. */}
+      <p className="prose-ko mt-6 max-w-[760px] text-[16px] text-body">
         학생은 활동 당일 소감을 남기고, 교사는 그 기록을 골라 생활기록부 특기사항 초안을 만듭니다.
+      </p>
+      <p className="prose-ko mt-3 text-[20px] font-bold text-coral">
         최종 기록은 언제나 교사가 확인하고 수정합니다.
       </p>
 
