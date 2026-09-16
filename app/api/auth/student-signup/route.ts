@@ -15,8 +15,17 @@ interface Body {
   studentName?: string;
 }
 
+/**
+ * 두 단계의 실패를 다른 문장으로 알린다.
+ * 학급 자체가 없는 것과 명단에 없는 것을 같은 문장으로 알리면 담임이 원인을 찾지 못한다.
+ * (2026-09 2학년 6반: 학교명 오타로 24명 전원이 막혔는데 학생들은 "정보 불일치"만 봤다)
+ * 학급 유무는 가입 화면 목록에도 보이는 정보라 알려줘도 새어 나가는 게 없다.
+ * 명단 단계는 번호·이름을 대조하므로 어느 쪽이 틀렸는지는 알리지 않는다.
+ */
+const CLASS_NOT_FOUND_MESSAGE =
+  "입력한 학년도·학교·학년·반으로 등록된 학급이 없습니다. 담임 선생님께 학급이 등록되어 있는지, 학교명이 정확한지 확인해주세요.";
 const MISMATCH_MESSAGE =
-  "등록된 학급 명단과 정보가 일치하지 않습니다. 입력한 학년도, 학교, 학년, 반, 번호, 이름을 확인해주세요.";
+  "학급 명단에서 번호와 이름이 일치하는 학생을 찾지 못했습니다. 명단에 적힌 그대로 입력했는지 확인하거나 담임 선생님께 문의해주세요.";
 
 /**
  * 학생 회원가입 = 교사가 미리 등록한 명단과의 연결.
@@ -50,7 +59,7 @@ export async function POST(req: Request) {
     });
 
     const classSnap = await db.collection(COL.classes).where("matchKey", "==", matchKey).get();
-    if (classSnap.size !== 1) throw badRequest(MISMATCH_MESSAGE, "roster_mismatch");
+    if (classSnap.size !== 1) throw badRequest(CLASS_NOT_FOUND_MESSAGE, "class_not_found");
     const klass = classSnap.docs[0].data() as ClassDoc;
 
     // 번호로 좁힌 뒤 정규화된 이름을 정확히 비교한다. 유사도 매칭은 하지 않는다.
