@@ -1,15 +1,16 @@
 import { adminDb, COL } from "@/lib/firebase/admin";
 import { badRequest } from "@/lib/api-error";
 import { route } from "@/lib/route-helpers";
-import { groupRegisteredClasses } from "@/lib/roster/registered-classes";
+import { normalizeSchoolName } from "@/lib/roster/normalize";
+import { listRegisteredClasses } from "@/lib/roster/registered-classes";
+import { SCHOOL_NAME } from "@/lib/school";
 import type { ClassDoc } from "@/lib/types";
 
 /**
- * 가입 화면용: 해당 학년도에 등록된 학교와 학년·반 목록.
+ * 가입 화면용: 해당 학년도에 등록된 학년·반 목록.
  *
- * 로그인 전에 호출되므로 학교명·학년·반 번호만 내려주고, 교사 이름·인원수·학급 id 등은
- * 절대 담지 않는다. 학생이 학교명을 타이핑하다 틀리는 일과, 교사가 이미 있는 학교명을
- * 다르게 적는 일(2026-09 2학년 6반 사고)을 막기 위한 목록이다.
+ * 로그인 전에 호출되므로 학년·반 번호만 내려주고 교사 이름·인원수·학급 id 는 담지 않는다.
+ * 학생이 학년·반을 목록에서 고르게 해서, 없는 학급을 입력하고 "왜 안 되지" 하는 일을 없앤다.
  */
 export async function GET(req: Request) {
   return route(async () => {
@@ -24,13 +25,16 @@ export async function GET(req: Request) {
       .where("schoolYear", "==", schoolYear)
       .get();
 
-    const schools = groupRegisteredClasses(
-      snap.docs.map((d) => {
-        const c = d.data() as ClassDoc;
-        return { schoolName: c.schoolName, grade: c.grade, classNumber: c.classNumber };
-      }),
+    // 학교명이 고정되기 전에 다른 이름으로 등록된 학급이 있다면 학생이 어차피 대조하지
+    // 못하므로 목록에서도 뺀다. (현재는 전부 같은 이름이다)
+    const school = normalizeSchoolName(SCHOOL_NAME);
+    const classes = listRegisteredClasses(
+      snap.docs
+        .map((d) => d.data() as ClassDoc)
+        .filter((c) => normalizeSchoolName(c.schoolName) === school)
+        .map((c) => ({ grade: c.grade, classNumber: c.classNumber })),
     );
 
-    return { schoolYear, schools };
+    return { schoolYear, classes };
   });
 }

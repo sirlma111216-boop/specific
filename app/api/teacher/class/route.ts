@@ -4,11 +4,11 @@ import { requireTeacher } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
 import { buildClassMatchKey } from "@/lib/roster/normalize";
 import { parseStudentRows } from "@/lib/roster/parse-students";
+import { SCHOOL_NAME } from "@/lib/school";
 import type { ClassDoc, RosterDoc } from "@/lib/types";
 
 interface CreateBody {
   schoolYear?: string | number;
-  schoolName?: string;
   grade?: string;
   classNumber?: string;
   teacherName?: string;
@@ -35,7 +35,8 @@ export async function POST(req: Request) {
 
     const body = await readJson<CreateBody>(req);
     const schoolYear = Number(body.schoolYear);
-    const schoolName = (body.schoolName ?? "").trim();
+    // 학교는 한 곳뿐이라 입력받지 않는다. (교사마다 다르게 적으면 학생 가입이 막힌다)
+    const schoolName = SCHOOL_NAME;
     const grade = (body.grade ?? "").trim();
     const classNumber = (body.classNumber ?? "").trim();
     const teacherName = (body.teacherName ?? "").trim();
@@ -43,7 +44,6 @@ export async function POST(req: Request) {
     if (!Number.isInteger(schoolYear) || schoolYear < 2000 || schoolYear > 2100) {
       throw badRequest("학년도를 올바르게 입력해주세요. (예: 2026)");
     }
-    if (!schoolName) throw badRequest("학교명을 입력해주세요.");
     if (!grade) throw badRequest("학년을 입력해주세요.");
     if (!classNumber) throw badRequest("반을 입력해주세요.");
     if (!teacherName) throw badRequest("담임교사 이름을 입력해주세요.");
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
     const dup = await db.collection(COL.classes).where("matchKey", "==", matchKey).limit(1).get();
     if (!dup.empty) {
       throw badRequest(
-        "같은 학년도·학교·학년·반이 이미 등록되어 있습니다. 학급 정보를 확인해주세요.",
+        "같은 학년도·학년·반이 이미 등록되어 있습니다. 다른 선생님이 먼저 등록했다면 관리자에게 문의해주세요.",
         "class_duplicated",
       );
     }

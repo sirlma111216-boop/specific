@@ -3,19 +3,19 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select } from "@/components/ui/field";
+import { Field, Input } from "@/components/ui/field";
 import { Alert, Card } from "@/components/ui/surface";
 import { emptyRows, RosterEditor, type RosterRow } from "@/components/roster/roster-editor";
 import { apiFetch, errorMessage } from "@/lib/client/api";
 import { useAuth } from "@/lib/client/auth-context";
 import { useRegisteredClasses } from "@/lib/client/use-registered-classes";
+import { formatClassName } from "@/lib/utils";
 
 export default function OnboardingPage() {
   const router = useRouter();
   const { profile, refresh } = useAuth();
   const [form, setForm] = useState({
     schoolYear: String(new Date().getFullYear()),
-    schoolName: "",
     grade: "",
     classNumber: "",
     teacherName: profile?.klass?.teacherName ?? "",
@@ -24,15 +24,18 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // 같은 학교의 다른 반이 이미 등록돼 있으면 그 학교명을 고르게 한다.
-  // 학교명이 글자 하나만 달라도(예: '경희여자중학') 그 반 학생은 아무도 가입하지 못한다.
+  // 이미 등록된 학급과 겹치면 제출 전에 알린다. (서버도 막지만, 입력 중에 아는 편이 낫다)
   const registered = useRegisteredClasses(form.schoolYear);
-  const knownSchools = registered.status === "ready" ? registered.schools : [];
-  const [customSchool, setCustomSchool] = useState(false);
-  const useSelect = knownSchools.length > 0 && !customSchool;
+  const gradeKey = (form.grade.match(/d+/) ?? [""])[0];
+  const classKey = (form.classNumber.match(/d+/) ?? [""])[0];
+  const alreadyRegistered =
+    registered.status === "ready" &&
+    gradeKey !== "" &&
+    classKey !== "" &&
+    registered.classes.some((c) => c.grade === String(Number(gradeKey)) && c.classNumber === String(Number(classKey)));
 
   function update(key: keyof typeof form) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    return (e: React.ChangeEvent<HTMLInputElement>) =>
       setForm((prev) => ({ ...prev, [key]: e.target.value }));
   }
 
@@ -87,67 +90,28 @@ export default function OnboardingPage() {
                 required
               />
             </Field>
-            {useSelect ? (
-              <Field
-                label="학교명"
-                htmlFor="schoolName"
-                hint="이미 등록된 학교입니다. 다른 학교라면 '직접 입력'을 고르세요."
-              >
-                <Select
-                  id="schoolName"
-                  value={form.schoolName}
-                  onChange={(e) => {
-                    if (e.target.value === "__custom__") {
-                      setCustomSchool(true);
-                      setForm((p) => ({ ...p, schoolName: "" }));
-                    } else {
-                      setForm((p) => ({ ...p, schoolName: e.target.value }));
-                    }
-                  }}
-                  required
-                >
-                  <option value="">선택하세요</option>
-                  {knownSchools.map((x) => (
-                    <option key={x.key} value={x.name}>
-                      {x.name} (등록된 학급 {x.classes.length}개)
-                    </option>
-                  ))}
-                  <option value="__custom__">다른 학교 — 직접 입력</option>
-                </Select>
-              </Field>
-            ) : (
-              <Field
-                label="학교명"
-                htmlFor="schoolName"
-                hint={
-                  knownSchools.length > 0
-                    ? "학생이 가입할 때 이 이름을 고르게 됩니다. 정식 명칭을 정확히 적어주세요."
-                    : "예: ○○중학교 — 학생이 가입할 때 이 이름을 고르게 됩니다."
-                }
-              >
-                <Input
-                  id="schoolName"
-                  value={form.schoolName}
-                  onChange={update("schoolName")}
-                  required
-                />
-                {knownSchools.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setCustomSchool(false)}
-                    className="mt-1.5 text-[13px] text-link underline underline-offset-2"
-                  >
-                    등록된 학교에서 고르기
-                  </button>
-                )}
-              </Field>
-            )}
-            <Field label="학년" htmlFor="grade" hint="예: 3학년">
-              <Input id="grade" value={form.grade} onChange={update("grade")} required />
+            <Field label="학년" htmlFor="grade" hint="예: 3">
+              <Input
+                id="grade"
+                inputMode="numeric"
+                value={form.grade}
+                onChange={update("grade")}
+                required
+              />
             </Field>
-            <Field label="반" htmlFor="classNumber" hint="예: 2반">
+            <Field
+              label="반"
+              htmlFor="classNumber"
+              hint="예: 2"
+              error={
+                alreadyRegistered
+                  ? `${formatClassName(gradeKey, classKey)}은(는) 이미 다른 선생님이 등록했습니다.`
+                  : undefined
+              }
+            >
               <Input
                 id="classNumber"
+                inputMode="numeric"
                 value={form.classNumber}
                 onChange={update("classNumber")}
                 required
@@ -163,9 +127,9 @@ export default function OnboardingPage() {
             </Field>
           </div>
           <p className="prose-ko rounded-md bg-cream px-4 py-3 text-[13px] text-ink">
-            학생은 회원가입할 때 여기 등록한 <strong>학교명 · 학년 · 반</strong>을 목록에서 고르고
-            명단의 <strong>번호 · 이름</strong>을 입력해 연결됩니다. 학교명은 다른 반과 똑같이 적어야
-            학생이 헷갈리지 않습니다.
+            학생은 회원가입할 때 여기 등록한 <strong>학년 · 반</strong>을 목록에서 고르고, 명단의{" "}
+            <strong>번호 · 이름</strong>을 입력해 연결됩니다. 이름은 학생이 평소 쓰는 표기 그대로
+            적어주세요.
           </p>
         </Card>
 

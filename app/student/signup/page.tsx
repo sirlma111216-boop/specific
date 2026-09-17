@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { AuthShell, translateFirebaseAuthError } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,13 @@ import { clientAuth } from "@/lib/firebase/client";
 
 const THIS_YEAR = String(new Date().getFullYear());
 
+/**
+ * 학생 회원가입.
+ *
+ * 학교명은 입력받지 않는다(한 학교 전용). 학년·반은 담임이 등록한 학급 목록에서 고른다.
+ * 실패 문구는 가입 버튼 바로 옆에 띄우고 그 자리로 화면을 옮긴다 — 예전에는 폼 맨 위에
+ * 떠서, 버튼을 누른 학생 눈에는 아무 일도 안 일어난 것처럼 보였다.
+ */
 export default function StudentSignupPage() {
   const { configured, refresh } = useAuth();
   const router = useRouter();
@@ -24,7 +31,6 @@ export default function StudentSignupPage() {
     email: "",
     password: "",
     schoolYear: THIS_YEAR,
-    schoolName: "",
     grade: "",
     classNumber: "",
     studentNumber: "",
@@ -32,19 +38,15 @@ export default function StudentSignupPage() {
   });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const errorRef = useRef<HTMLDivElement>(null);
 
-  // 학교·학년·반은 타이핑하지 않고 등록된 학급 중에서 고른다.
-  // 교사가 적은 학교명과 글자 하나만 달라도 가입이 막히기 때문이다.
   const registered = useRegisteredClasses(form.schoolYear);
-  const pickable = registered.status === "ready" && registered.schools.length > 0;
+  const pickable = registered.status === "ready" && registered.classes.length > 0;
+  const noneRegistered = registered.status === "ready" && registered.classes.length === 0;
 
   // 선택지가 하나뿐이면 고른 것으로 친다. 상태에 쓰지 않고 렌더마다 파생시키므로
   // 목록이 바뀌어도 어긋나지 않고, 제출할 때도 이 값을 보낸다.
-  const school = pickable
-    ? (registered.schools.find((x) => x.name === form.schoolName) ??
-      (registered.schools.length === 1 ? registered.schools[0] : undefined))
-    : undefined;
-  const grades = gradesOf(school);
+  const grades = gradesOf(registered.classes);
   const grade = pickable
     ? grades.includes(form.grade)
       ? form.grade
@@ -52,7 +54,7 @@ export default function StudentSignupPage() {
         ? grades[0]
         : ""
     : form.grade;
-  const classNumbers = classNumbersOf(school, grade);
+  const classNumbers = classNumbersOf(registered.classes, grade);
   const classNumber = pickable
     ? classNumbers.includes(form.classNumber)
       ? form.classNumber
@@ -60,13 +62,21 @@ export default function StudentSignupPage() {
         ? classNumbers[0]
         : ""
     : form.classNumber;
-  const schoolName = pickable ? (school?.name ?? "") : form.schoolName;
 
   if (!configured) return <SetupNotice />;
 
   function update(key: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm((prev) => ({ ...prev, [key]: e.target.value }));
+  }
+
+  function showError(message: string) {
+    setError(message);
+    // 렌더가 끝난 뒤 문구 자리로 옮긴다. 버튼 바로 위라 대개 이미 보이지만,
+    // 작은 화면에서 키보드가 올라와 있으면 가려질 수 있다.
+    requestAnimationFrame(() => {
+      errorRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
   }
 
   async function onSubmit(e: FormEvent) {
@@ -76,13 +86,13 @@ export default function StudentSignupPage() {
     try {
       await apiFetch("/api/auth/student-signup", {
         method: "POST",
-        body: JSON.stringify({ ...form, schoolName, grade, classNumber }),
+        body: JSON.stringify({ ...form, grade, classNumber }),
       });
       await signInWithEmailAndPassword(clientAuth(), form.email.trim().toLowerCase(), form.password);
       await refresh();
       router.replace("/student");
     } catch (err) {
-      setError(
+      showError(
         (err as { code?: string })?.code?.startsWith("auth/")
           ? translateFirebaseAuthError(err)
           : errorMessage(err),
@@ -96,11 +106,9 @@ export default function StudentSignupPage() {
     <AuthShell
       eyebrow="학생"
       title="회원가입"
-      description="담임 선생님이 미리 등록한 우리 반 명단과 연결됩니다. 명단에 있는 정보 그대로 입력해주세요."
+      description="담임 선생님이 미리 등록한 우리 반 명단과 연결됩니다. 번호와 이름은 명단에 있는 그대로 입력해주세요."
     >
       <form onSubmit={onSubmit} noValidate>
-        {error && <Alert>{error}</Alert>}
-
         <Field label="이메일" htmlFor="email">
           <Input
             id="email"
@@ -135,101 +143,91 @@ export default function StudentSignupPage() {
             required
           />
         </Field>
+
+        {noneRegistered && (
+          <Alert tone="info">
+            {form.schoolYear}학년도에 등록된 학급이 아직 없습니다. 담임 선생님이 학급을 등록한 뒤에
+            가입할 수 있습니다.
+          </Alert>
+        )}
+
         {pickable ? (
-          <>
-            <Field label="학교명" htmlFor="schoolName">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="학년" htmlFor="grade">
               <Select
-                id="schoolName"
-                value={schoolName}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, schoolName: e.target.value, grade: "", classNumber: "" }))
-                }
+                id="grade"
+                value={grade}
+                onChange={(e) => setForm((p) => ({ ...p, grade: e.target.value, classNumber: "" }))}
                 required
               >
-                <option value="">선택하세요</option>
-                {registered.schools.map((x) => (
-                  <option key={x.key} value={x.name}>
-                    {x.name}
+                <option value="">선택</option>
+                {grades.map((g) => (
+                  <option key={g} value={g}>
+                    {g}학년
                   </option>
                 ))}
               </Select>
             </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="학년" htmlFor="grade">
-                <Select
-                  id="grade"
-                  value={grade}
-                  onChange={(e) => setForm((p) => ({ ...p, grade: e.target.value, classNumber: "" }))}
-                  disabled={!school}
-                  required
-                >
-                  <option value="">선택</option>
-                  {grades.map((g) => (
-                    <option key={g} value={g}>
-                      {g}학년
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="반" htmlFor="classNumber">
-                <Select
-                  id="classNumber"
-                  value={classNumber}
-                  onChange={update("classNumber")}
-                  disabled={!grade}
-                  required
-                >
-                  <option value="">선택</option>
-                  {classNumbers.map((c) => (
-                    <option key={c} value={c}>
-                      {c}반
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-          </>
-        ) : (
-          <>
             <Field
-              label="학교명"
-              htmlFor="schoolName"
+              label="반"
+              htmlFor="classNumber"
               hint={
-                registered.status === "loading"
-                  ? "등록된 학급을 불러오는 중…"
-                  : "담임 선생님이 등록한 학교명과 똑같이 입력해주세요."
+                grade && classNumbers.length === 0
+                  ? `${grade}학년에 등록된 반이 아직 없습니다.`
+                  : undefined
               }
             >
+              <Select
+                id="classNumber"
+                value={classNumber}
+                onChange={update("classNumber")}
+                disabled={!grade}
+                required
+              >
+                <option value="">선택</option>
+                {classNumbers.map((c) => (
+                  <option key={c} value={c}>
+                    {c}반
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <Field
+              label="학년"
+              htmlFor="grade"
+              hint={registered.status === "loading" ? "등록된 학급을 불러오는 중…" : undefined}
+            >
               <Input
-                id="schoolName"
-                value={form.schoolName}
-                onChange={update("schoolName")}
-                placeholder="○○중학교"
+                id="grade"
+                inputMode="numeric"
+                value={form.grade}
+                onChange={update("grade")}
+                placeholder="3"
                 required
               />
             </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="학년" htmlFor="grade">
-                <Input
-                  id="grade"
-                  value={form.grade}
-                  onChange={update("grade")}
-                  placeholder="3학년"
-                  required
-                />
-              </Field>
-              <Field label="반" htmlFor="classNumber">
-                <Input
-                  id="classNumber"
-                  value={form.classNumber}
-                  onChange={update("classNumber")}
-                  placeholder="2반"
-                  required
-                />
-              </Field>
-            </div>
-          </>
+            <Field label="반" htmlFor="classNumber">
+              <Input
+                id="classNumber"
+                inputMode="numeric"
+                value={form.classNumber}
+                onChange={update("classNumber")}
+                placeholder="2"
+                required
+              />
+            </Field>
+          </div>
         )}
+        {pickable && (
+          <p className="-mt-2 mb-4 text-[13px] text-muted">
+            목록에 우리 반이 없으면 담임 선생님이 아직 학급을 등록하지 않은 것입니다. 선생님께
+            알려주세요.
+          </p>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <Field label="번호" htmlFor="studentNumber">
             <Input
@@ -252,7 +250,14 @@ export default function StudentSignupPage() {
           </Field>
         </div>
 
-        <Button type="submit" loading={busy} className="mt-2 w-full">
+        {/* 실패 문구는 버튼 바로 위. 학생이 보고 있는 자리다. */}
+        {error && (
+          <div ref={errorRef}>
+            <Alert>{error}</Alert>
+          </div>
+        )}
+
+        <Button type="submit" loading={busy} disabled={noneRegistered} className="mt-2 w-full">
           가입하기
         </Button>
       </form>
