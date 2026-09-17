@@ -4,6 +4,7 @@ import { badRequest, notFound } from "@/lib/api-error";
 import { requireAdmin, requireStaff } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
 import { resolveForm } from "@/lib/forms/schema";
+import { invalidateEvents } from "@/lib/events/load";
 import { sanitizeForm } from "@/lib/forms/sanitize-server";
 import { commitInChunks } from "@/lib/firebase/batch";
 import { rosterCountField } from "@/lib/events/counters";
@@ -95,6 +96,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ eventI
     await ref.update(update);
     const fresh = await ref.get();
     const saved = fresh.data() as EventDoc;
+    invalidateEvents();
     return { event: { ...saved, form: resolveForm(saved.form) }, movedCounters };
   });
 }
@@ -129,6 +131,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ event
     ops.push((b) => b.delete(ref));
 
     await commitInChunks(ops);
+    invalidateEvents();
 
     return {
       ok: true,

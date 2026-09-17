@@ -3,10 +3,10 @@ import { notFound } from "@/lib/api-error";
 import { requireAdmin } from "@/lib/auth/server";
 import { route } from "@/lib/route-helpers";
 import { eventVisibleTo } from "@/lib/events/visibility";
+import { loadAllEvents } from "@/lib/events/load";
 import { resolveForm } from "@/lib/forms/schema";
 import type {
   ClassDoc,
-  EventDoc,
   ResponseDoc,
   RosterDoc,
   StudentRecordDoc,
@@ -29,10 +29,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ rosterId
     if (!rosterSnap.exists) throw notFound("학생을 찾을 수 없습니다.");
     const roster = rosterSnap.data() as RosterDoc;
 
-    const [classSnap, userSnap, eventSnap, responseSnap, noteSnap, recordSnap] = await Promise.all([
+    const [classSnap, userSnap, events, responseSnap, noteSnap, recordSnap] = await Promise.all([
       db.collection(COL.classes).doc(roster.classId).get(),
       roster.linkedUserId ? db.collection(COL.users).doc(roster.linkedUserId).get() : null,
-      db.collection(COL.events).get(),
+      loadAllEvents(),
       db.collection(COL.responses).where("rosterId", "==", rosterId).get(),
       db.collection(COL.notes).where("rosterId", "==", rosterId).get(),
       db.collection(COL.records).where("rosterId", "==", rosterId).get(),
@@ -45,8 +45,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ rosterId
     const notes = new Map<string, TeacherNoteDoc>();
     noteSnap.forEach((d) => notes.set((d.data() as TeacherNoteDoc).eventId, d.data() as TeacherNoteDoc));
 
-    const events = eventSnap.docs
-      .map((d) => d.data() as EventDoc)
+    const visibleEvents = events
       .filter((e) => eventVisibleTo(e, Boolean(klass?.isTest)))
       .sort((a, b) => a.eventDate.localeCompare(b.eventDate) || a.title.localeCompare(b.title))
       .map((e) => {
@@ -107,7 +106,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ rosterId
       account: user
         ? { uid: roster.linkedUserId, email: user.email, createdAt: user.createdAt }
         : null,
-      events,
+      events: visibleEvents,
       records,
     };
   });

@@ -5,6 +5,7 @@ import { readJson, route } from "@/lib/route-helpers";
 import { DEFAULT_GUIDANCE } from "@/lib/events/defaults";
 import { computeEventPhase } from "@/lib/events/phase";
 import { safeCount } from "@/lib/events/counters";
+import { invalidateEvents, loadAllEvents } from "@/lib/events/load";
 import { defaultForm, resolveForm } from "@/lib/forms/schema";
 import { isValidIsoDate, todayInKST } from "@/lib/utils";
 import type { Category, EventDoc, EventStatus } from "@/lib/types";
@@ -28,8 +29,8 @@ export async function GET(req: Request) {
     await requireStaff(req);
     const db = adminDb();
 
-    const [eventSnap, classSnap] = await Promise.all([
-      db.collection(COL.events).get(),
+    const [events, classSnap] = await Promise.all([
+      loadAllEvents(),
       db.collection(COL.classes).get(),
     ]);
 
@@ -41,8 +42,8 @@ export async function GET(req: Request) {
     });
 
     const today = todayInKST();
-    const events = eventSnap.docs
-      .map((d) => d.data() as EventDoc)
+    const eventList = events
+      .slice()
       .sort((a, b) =>
         a.eventDate === b.eventDate ? b.createdAt - a.createdAt : b.eventDate.localeCompare(a.eventDate),
       )
@@ -53,7 +54,7 @@ export async function GET(req: Request) {
         phase: computeEventPhase(e.status, e.eventDate, today, false),
       }));
 
-    return { events, studentCount, classCount: classSnap.size, today };
+    return { events: eventList, studentCount, classCount: classSnap.size, today };
   });
 }
 
@@ -95,6 +96,7 @@ export async function POST(req: Request) {
       ...(body.isTest ? { isTest: true } : {}),
     };
     await ref.set(doc);
+    invalidateEvents();
     return { event: doc };
   });
 }

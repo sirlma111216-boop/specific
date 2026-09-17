@@ -4,9 +4,9 @@ import { requireTeacherWithClass } from "@/lib/auth/server";
 import { route } from "@/lib/route-helpers";
 import { mergeReflection } from "@/lib/events/reflection";
 import { eventVisibleTo } from "@/lib/events/visibility";
+import { loadAllEvents } from "@/lib/events/load";
 import type {
   Category,
-  EventDoc,
   ResponseDoc,
   RosterDoc,
   StudentRecordDoc,
@@ -33,8 +33,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ rosterId
     // 이전/다음 학생 이동을 위해 명단을 한 번 읽는다.
     // 앞뒤 한 명만 집는 범위 쿼리로 바꾸면 읽기는 줄지만 Firestore 복합 색인을 따로
     // 배포해야 한다. 학생당 20여 건 아끼자고 설치 단계를 늘릴 만한 이득이 아니라 그대로 둔다.
-    const [eventSnap, responseSnap, noteSnap, recordSnap, classRosterSnap] = await Promise.all([
-      db.collection(COL.events).get(),
+    const [allEvents, responseSnap, noteSnap, recordSnap, classRosterSnap] = await Promise.all([
+      loadAllEvents(),
       db.collection(COL.responses).where("rosterId", "==", rosterId).get(),
       db.collection(COL.notes).where("rosterId", "==", rosterId).get(),
       db.collection(COL.records).where("rosterId", "==", rosterId).get(),
@@ -55,8 +55,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ rosterId
       if (n.content?.trim()) teacherText.set(n.eventId, n.content.trim());
     });
 
-    const all = eventSnap.docs
-      .map((d) => d.data() as EventDoc)
+    const all = allEvents
       .filter((e) => eventVisibleTo(e, ctx.isTest))
       .sort((a, b) => a.eventDate.localeCompare(b.eventDate))
       .map<TeacherEventWithResponse>((e) => ({

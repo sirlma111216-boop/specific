@@ -3,6 +3,7 @@ import { badRequest, notFound } from "@/lib/api-error";
 import { requireStaff } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
 import { resolveForm } from "@/lib/forms/schema";
+import { invalidateEvents } from "@/lib/events/load";
 import { isValidIsoDate } from "@/lib/utils";
 import type { EventDoc, EventStatus } from "@/lib/types";
 
@@ -52,6 +53,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ eventId
       ...(src.isTest ? { isTest: true } : {}),
     };
     await ref.set(doc);
+    invalidateEvents();
     return { event: doc };
   });
 }

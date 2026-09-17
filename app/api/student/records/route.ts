@@ -2,10 +2,11 @@ import { adminDb, COL } from "@/lib/firebase/admin";
 import { requireStudent } from "@/lib/auth/server";
 import { route } from "@/lib/route-helpers";
 import { computeEventPhase } from "@/lib/events/phase";
+import { loadAllEvents } from "@/lib/events/load";
 import { eventVisibleTo } from "@/lib/events/visibility";
 import { resolveForm } from "@/lib/forms/schema";
 import { todayInKST } from "@/lib/utils";
-import type { EventDoc, ResponseDoc, StudentEventItem } from "@/lib/types";
+import type { ResponseDoc, StudentEventItem } from "@/lib/types";
 
 /**
  * 학생 본인의 지난 활동 기록.
@@ -19,8 +20,8 @@ export async function GET(req: Request) {
     const db = adminDb();
     const today = todayInKST();
 
-    const [eventSnap, mySnap] = await Promise.all([
-      db.collection(COL.events).get(),
+    const [events, mySnap] = await Promise.all([
+      loadAllEvents(),
       db.collection(COL.responses).where("studentUid", "==", ctx.uid).get(),
     ]);
 
@@ -30,8 +31,7 @@ export async function GET(req: Request) {
       myResponses.set(r.eventId, r);
     });
 
-    const items: StudentEventItem[] = eventSnap.docs
-      .map((d) => d.data() as EventDoc)
+    const items: StudentEventItem[] = events
       .filter((e) => eventVisibleTo(e, ctx.isTest))
       .map((e) => {
         const mine = myResponses.get(e.eventId);

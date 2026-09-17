@@ -3,6 +3,7 @@ import { forbidden, notFound } from "@/lib/api-error";
 import { getAuthContext } from "@/lib/auth/server";
 import { route } from "@/lib/route-helpers";
 import { eventVisibleTo } from "@/lib/events/visibility";
+import { loadAllEvents } from "@/lib/events/load";
 import { DEFAULT_QUESTION_LABEL, resolveForm, type FormAnswers } from "@/lib/forms/schema";
 import type { ClassDoc, EventDoc, ResponseDoc, RosterDoc } from "@/lib/types";
 
@@ -39,19 +40,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ rosterId
       throw forbidden("교사 또는 관리자만 볼 수 있습니다.");
     }
 
-    const [classSnap, eventSnap, responseSnap] = await Promise.all([
+    const [classSnap, events, responseSnap] = await Promise.all([
       db.collection(COL.classes).doc(roster.classId).get(),
-      db.collection(COL.events).get(),
+      loadAllEvents(),
       db.collection(COL.responses).where("rosterId", "==", rosterId).get(),
     ]);
     const klass = classSnap.data() as ClassDoc | undefined;
     if (!klass) throw notFound("학급 정보를 찾을 수 없습니다.");
 
     const eventById = new Map<string, EventDoc>();
-    eventSnap.forEach((d) => {
-      const e = d.data() as EventDoc;
+    for (const e of events) {
       if (eventVisibleTo(e, Boolean(klass.isTest))) eventById.set(e.eventId, e);
-    });
+    }
 
     const rows: PrintRow[] = [];
     responseSnap.forEach((d) => {

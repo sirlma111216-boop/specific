@@ -3,6 +3,7 @@ import { badRequest, notFound } from "@/lib/api-error";
 import { requireTeacherWithClass } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
 import { eventVisibleTo } from "@/lib/events/visibility";
+import { loadAllEvents } from "@/lib/events/load";
 import { GeminiError, isGeminiConfigured } from "@/lib/gemini/client";
 import { generateStudentRecord } from "@/lib/record-generator/generate";
 import type { SelectableEvent } from "@/lib/record-generator/select";
@@ -65,19 +66,18 @@ export async function POST(req: Request) {
     const roster = rosterSnap.data() as RosterDoc;
     if (roster.classId !== ctx.classId) throw notFound("학생을 찾을 수 없습니다.");
 
-    const [classSnap, eventSnap, responseSnap, noteSnap] = await Promise.all([
+    const [classSnap, allEvents, responseSnap, noteSnap] = await Promise.all([
       db.collection(COL.classes).doc(ctx.classId).get(),
-      db.collection(COL.events).get(),
+      loadAllEvents(),
       db.collection(COL.responses).where("rosterId", "==", rosterId).get(),
       db.collection(COL.notes).where("rosterId", "==", rosterId).get(),
     ]);
     const klass = classSnap.data() as ClassDoc | undefined;
 
     const eventById = new Map<string, EventDoc>();
-    eventSnap.forEach((d) => {
-      const e = d.data() as EventDoc;
+    for (const e of allEvents) {
       if (eventVisibleTo(e, ctx.isTest)) eventById.set(e.eventId, e);
-    });
+    }
 
     // 학생 원문 위에 교사 보완본을 덮어 최종 자료를 만든다.
     const reflections = new Map<string, string>();
