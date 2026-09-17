@@ -6,6 +6,7 @@ import { DEFAULT_GUIDANCE } from "@/lib/events/defaults";
 import { computeEventPhase } from "@/lib/events/phase";
 import { safeCount } from "@/lib/events/counters";
 import { invalidateEvents, loadAllEvents } from "@/lib/events/load";
+import { loadAllClasses } from "@/lib/admin/lookup";
 import { defaultForm, resolveForm } from "@/lib/forms/schema";
 import { isValidIsoDate, todayInKST } from "@/lib/utils";
 import type { Category, EventDoc, EventStatus } from "@/lib/types";
@@ -27,19 +28,17 @@ const STATUSES: EventStatus[] = ["scheduled", "open", "closed"];
 export async function GET(req: Request) {
   return route(async () => {
     await requireStaff(req);
-    const db = adminDb();
 
-    const [events, classSnap] = await Promise.all([
-      loadAllEvents(),
-      db.collection(COL.classes).get(),
-    ]);
+    const [events, classMap] = await Promise.all([loadAllEvents(), loadAllClasses()]);
 
     // 전교생 수는 학급 문서의 인원수를 더해 구한다. (명단을 훑지 않는다)
     let studentCount = 0;
-    classSnap.forEach((d) => {
-      const c = d.data() as { studentCount?: number; isTest?: boolean };
-      if (!c.isTest) studentCount += safeCount(c.studentCount);
-    });
+    let classCount = 0;
+    for (const c of classMap.values()) {
+      if (c.isTest) continue;
+      classCount += 1;
+      studentCount += safeCount(c.studentCount);
+    }
 
     const today = todayInKST();
     const eventList = events
@@ -54,7 +53,7 @@ export async function GET(req: Request) {
         phase: computeEventPhase(e.status, e.eventDate, today, false),
       }));
 
-    return { events: eventList, studentCount, classCount: classSnap.size, today };
+    return { events: eventList, studentCount, classCount, today };
   });
 }
 

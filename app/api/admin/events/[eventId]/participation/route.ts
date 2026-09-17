@@ -4,6 +4,7 @@ import { requireStaff } from "@/lib/auth/server";
 import { route } from "@/lib/route-helpers";
 import { sortClassSummaries } from "@/lib/admin/lookup";
 import { safeCount } from "@/lib/events/counters";
+import { cached } from "@/lib/server-cache";
 import { formatClassFull } from "@/lib/utils";
 import type { ClassDoc, EventDoc, ResponseDoc } from "@/lib/types";
 
@@ -23,21 +24,28 @@ export async function GET(req: Request, { params }: { params: Promise<{ eventId:
     if (!eventSnap.exists) throw notFound("활동을 찾을 수 없습니다.");
     const event = eventSnap.data() as EventDoc;
 
-    const [classSnap, responseSnap] = await Promise.all([
-      db.collection(COL.classes).get(),
-      db.collection(COL.responses).where("eventId", "==", eventId).get(),
-    ]);
-
-    const submittedByClass = new Map<string, number>();
-    responseSnap.forEach((d) => {
-      const r = d.data() as ResponseDoc;
-      if (!r.content?.trim()) return;
-      submittedByClass.set(r.classId, (submittedByClass.get(r.classId) ?? 0) + 1);
-    });
+    // 참여 현황은 감시용이라 수십 초 지연은 괜찮다. 이벤트당 최대 수백 건(응답 전체)을
+    // 읽으므로, 반복 조회 시 60초 캐시로 재사용해 읽기 폭을 막는다.
+    const { classDocs, submittedByClass } = await cached(
+      `participation:${eventId}`,
+      60 * 1000,
+      async () => {
+        const [classSnap, responseSnap] = await Promise.all([
+          db.collection(COL.classes).get(),
+          db.collection(COL.responses).where("eventId", "==", eventId).get(),
+        ]);
+        const byClass = new Map<string, number>();
+        responseSnap.forEach((d) => {
+          const r = d.data() as ResponseDoc;
+          if (!r.content?.trim()) return;
+          byClass.set(r.classId, (byClass.get(r.classId) ?? 0) + 1);
+        });
+        return { classDocs: classSnap.docs.map((d) => d.data() as ClassDoc), submittedByClass: byClass };
+      },
+    );
 
     const classes = sortClassSummaries(
-      classSnap.docs
-        .map((d) => d.data() as ClassDoc)
+      classDocs
         .filter((c) => Boolean(c.isTest) === Boolean(event.isTest))
         .map((c) => ({
           classId: c.classId,

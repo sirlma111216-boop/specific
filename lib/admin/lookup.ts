@@ -5,7 +5,7 @@ import { normalizeGradeOrClass } from "@/lib/roster/normalize";
 import { cached } from "@/lib/server-cache";
 
 /** 관리자 화면 캐시 수명. 관리자가 무언가를 바꾸면 그 자리에서 지워지므로 길어도 된다. */
-const ADMIN_TTL_MS = 5 * 60 * 1000;
+const ADMIN_TTL_MS = 10 * 60 * 1000;
 import type { ClassDoc, RosterDoc, UserDoc } from "@/lib/types";
 
 /**
