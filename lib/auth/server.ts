@@ -3,6 +3,7 @@ import "server-only";
 import { adminAuth, adminDb, COL } from "@/lib/firebase/admin";
 import { forbidden, unauthorized } from "@/lib/api-error";
 import { cached, invalidate } from "@/lib/server-cache";
+import { addReads } from "@/lib/firebase/read-meter";
 
 /** 계정 문서 캐시 수명. 역할·소속은 거의 바뀌지 않는다. 바뀌는 곳에서는 forgetUser 를 부른다. */
 const USER_TTL_MS = 60 * 1000;
@@ -49,6 +50,7 @@ export async function getAuthContext(req: Request): Promise<AuthContext> {
   // 새 비밀번호를 정하는 즉시 풀린다.
   const user = await cached<UserDoc | null>(`user:${uid}`, USER_TTL_MS, async () => {
     const snap = await adminDb().collection(COL.users).doc(uid).get();
+    addReads(1);
     return snap.exists ? (snap.data() as UserDoc) : null;
   });
   if (!user) {

@@ -3,6 +3,7 @@ import "server-only";
 import { adminDb, COL } from "@/lib/firebase/admin";
 import { normalizeGradeOrClass } from "@/lib/roster/normalize";
 import { cached } from "@/lib/server-cache";
+import { addReads } from "@/lib/firebase/read-meter";
 
 /** 관리자 화면 캐시 수명. 관리자가 무언가를 바꾸면 그 자리에서 지워지므로 길어도 된다. */
 const ADMIN_TTL_MS = 10 * 60 * 1000;
@@ -34,6 +35,7 @@ export function sortClassSummaries<T extends { isTest: boolean; schoolYear: numb
 export function loadAllUsers(): Promise<Map<string, UserDoc>> {
   return cached("admin:users", ADMIN_TTL_MS, async () => {
     const snap = await adminDb().collection(COL.users).get();
+    addReads(snap.size);
     const map = new Map<string, UserDoc>();
     snap.forEach((d) => map.set(d.id, d.data() as UserDoc));
     return map;
@@ -43,6 +45,7 @@ export function loadAllUsers(): Promise<Map<string, UserDoc>> {
 export function loadAllClasses(): Promise<Map<string, ClassDoc>> {
   return cached("admin:classes", ADMIN_TTL_MS, async () => {
     const snap = await adminDb().collection(COL.classes).get();
+    addReads(snap.size);
     const map = new Map<string, ClassDoc>();
     snap.forEach((d) => map.set(d.id, d.data() as ClassDoc));
     return map;
@@ -52,6 +55,7 @@ export function loadAllClasses(): Promise<Map<string, ClassDoc>> {
 export function loadAllRoster(): Promise<Map<string, RosterDoc>> {
   return cached("admin:roster", ADMIN_TTL_MS, async () => {
     const snap = await adminDb().collection(COL.roster).get();
+    addReads(snap.size);
     const map = new Map<string, RosterDoc>();
     snap.forEach((d) => map.set(d.id, d.data() as RosterDoc));
     return map;

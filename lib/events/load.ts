@@ -2,6 +2,7 @@ import "server-only";
 
 import { adminDb, COL } from "@/lib/firebase/admin";
 import { cached, invalidate } from "@/lib/server-cache";
+import { addReads } from "@/lib/firebase/read-meter";
 import type { EventDoc } from "@/lib/types";
 
 /**
@@ -21,6 +22,7 @@ const CACHE_KEY = "events:all";
 export function loadAllEvents(): Promise<EventDoc[]> {
   return cached(CACHE_KEY, EVENTS_TTL_MS, async () => {
     const snap = await adminDb().collection(COL.events).get();
+    addReads(snap.size);
     return snap.docs.map((d) => d.data() as EventDoc);
   });
 }

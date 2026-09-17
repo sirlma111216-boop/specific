@@ -5,6 +5,7 @@ import { route } from "@/lib/route-helpers";
 import { sortClassSummaries } from "@/lib/admin/lookup";
 import { safeCount } from "@/lib/events/counters";
 import { cached } from "@/lib/server-cache";
+import { addReads } from "@/lib/firebase/read-meter";
 import { formatClassFull } from "@/lib/utils";
 import type { ClassDoc, EventDoc, ResponseDoc } from "@/lib/types";
 
@@ -40,6 +41,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ eventId:
           if (!r.content?.trim()) return;
           byClass.set(r.classId, (byClass.get(r.classId) ?? 0) + 1);
         });
+        addReads(classSnap.size + responseSnap.size);
         return { classDocs: classSnap.docs.map((d) => d.data() as ClassDoc), submittedByClass: byClass };
       },
     );
