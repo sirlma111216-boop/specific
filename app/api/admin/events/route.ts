@@ -16,6 +16,7 @@ interface CreateBody {
   guidance?: string;
   eventDate?: string;
   status?: string;
+  isTest?: boolean;
 }
 
 const CATEGORIES: Category[] = ["autonomous", "career"];
@@ -35,7 +36,8 @@ export async function GET(req: Request) {
     // 전교생 수는 학급 문서의 인원수를 더해 구한다. (명단을 훑지 않는다)
     let studentCount = 0;
     classSnap.forEach((d) => {
-      studentCount += safeCount((d.data() as { studentCount?: number }).studentCount);
+      const c = d.data() as { studentCount?: number; isTest?: boolean };
+      if (!c.isTest) studentCount += safeCount(c.studentCount);
     });
 
     const today = todayInKST();
@@ -89,6 +91,8 @@ export async function POST(req: Request) {
       submittedCount: 0,
       // 양식을 따로 만들지 않아도 바로 쓸 수 있도록 자유 서술 한 칸으로 시작한다.
       form: defaultForm(),
+      // 연수용 테스트 활동은 테스트 계정에게만 보인다.
+      ...(body.isTest ? { isTest: true } : {}),
     };
     await ref.set(doc);
     return { event: doc };

@@ -37,6 +37,11 @@ export interface UserDoc {
   rosterId?: string | null;
   /** 교사만 사용 */
   teacherName?: string;
+  /**
+   * 연수용 테스트 계정. 테스트 학급에 속한 교사·학생에게 켜진다.
+   * 테스트 계정은 테스트 활동만 보고, 실제 계정은 테스트 활동을 보지 못한다.
+   */
+  isTest?: boolean;
 }
 
 export interface ClassDoc {
@@ -56,6 +61,8 @@ export interface ClassDoc {
    * 예전 데이터에는 없을 수 있으므로 읽는 쪽에서 undefined를 허용한다.
    */
   studentCount?: number;
+  /** 연수용 테스트 학급. 실제 학생 가입 목록에 나오지 않고 테스트 활동만 본다. */
+  isTest?: boolean;
 }
 
 export interface RosterDoc {
@@ -103,6 +110,11 @@ export interface EventDoc {
   submittedCount?: number;
   /** 관리자가 만든 응답 양식. 비어 있으면 자유 서술 한 칸이 쓰인다. */
   form?: FormQuestion[];
+  /**
+   * 연수용 테스트 활동. 테스트 학급의 교사·학생에게만 보이고
+   * 실제 교사·학생 화면에는 어떤 경로로도 나타나지 않는다.
+   */
+  isTest?: boolean;
 }
 
 export interface ResponseDoc {

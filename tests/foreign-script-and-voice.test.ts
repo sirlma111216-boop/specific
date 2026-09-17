@@ -136,3 +136,22 @@ describe("교사 관찰자 시점 종결", () => {
     expect(issue?.instruction).toContain("중요성을 인식함");
   });
 });
+
+describe("활동 사이 접속 표현", () => {
+  it("'또한'으로 시작하는 문장을 잡아낸다", () => {
+    const text =
+      "학교폭력 예방교육(2026.03.12.)에 참여하는 모습을 보임. 또한 안전교육(2026.08.21.)에 참여하는 태도가 관찰됨.";
+    expect(codes(text)).toContain("connective_word");
+  });
+
+  it("활동명으로 바로 시작하면 통과한다", () => {
+    const text =
+      "학교폭력 예방교육(2026.03.12.)에 참여하는 모습을 보임. 안전교육(2026.08.21.)에 참여하는 태도가 관찰됨.";
+    expect(codes(text)).not.toContain("connective_word");
+  });
+
+  it("한 활동 안의 '이를 통해'는 문제 삼지 않는다", () => {
+    const text = "안전교육(2026.08.21.)에 참여하는 모습을 보임. 이를 통해 안전 의식이 향상된 것으로 보임.";
+    expect(codes(text)).not.toContain("connective_word");
+  });
+});

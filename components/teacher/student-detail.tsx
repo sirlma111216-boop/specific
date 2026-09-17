@@ -136,6 +136,18 @@ export function StudentDetail({ rosterId }: { rosterId: string }) {
         savedRecord={data.records[tab]}
         officerTerms={student.officerTerms ?? []}
       />
+
+      {/* 학교 보관용 근거 자료. 학생이 직접 쓴 원문만 표로 찍는다. 새 탭에서 인쇄 창이 열린다. */}
+      <div className="mt-12 flex justify-end border-t border-hairline pt-6">
+        <a
+          href={`/print/student/${rosterId}`}
+          target="_blank"
+          rel="noopener"
+          className="inline-flex items-center gap-2 rounded-lg border border-hairline bg-canvas px-4 py-2.5 text-[14px] font-medium text-ink"
+        >
+          <span aria-hidden>🖨</span> 학생 누가기록 출력
+        </a>
+      </div>
     </main>
   );
 }

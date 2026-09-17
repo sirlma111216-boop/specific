@@ -9,7 +9,7 @@ import Link from "next/link";
  */
 export function SiteFooter() {
   return (
-    <footer className="mt-auto border-t border-hairline bg-gradient-to-r from-cream/45 via-canvas to-mint/35">
+    <footer className="mt-auto border-t border-hairline bg-gradient-to-r from-cream/45 via-canvas to-mint/35 print:hidden">
       <div className="mx-auto flex max-w-[1180px] flex-wrap items-center justify-between gap-x-8 gap-y-2 px-6 py-4 text-[12px] leading-[1.6] text-muted">
         <p>© 2026 labbitory.com. All rights reserved.</p>
         <p>

@@ -11,7 +11,9 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/admin", label: "대시보드", exact: true },
-  { href: "/admin/events", label: "자율·진로 활동" },
+  { href: "/admin/events", label: "활동" },
+  { href: "/admin/classes", label: "학급" },
+  { href: "/admin/accounts", label: "계정" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

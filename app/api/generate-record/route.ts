@@ -2,6 +2,7 @@ import { adminDb, COL } from "@/lib/firebase/admin";
 import { badRequest, notFound } from "@/lib/api-error";
 import { requireTeacherWithClass } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
+import { eventVisibleTo } from "@/lib/events/visibility";
 import { GeminiError, isGeminiConfigured } from "@/lib/gemini/client";
 import { generateStudentRecord } from "@/lib/record-generator/generate";
 import type { SelectableEvent } from "@/lib/record-generator/select";
@@ -75,7 +76,7 @@ export async function POST(req: Request) {
     const eventById = new Map<string, EventDoc>();
     eventSnap.forEach((d) => {
       const e = d.data() as EventDoc;
-      eventById.set(e.eventId, e);
+      if (eventVisibleTo(e, ctx.isTest)) eventById.set(e.eventId, e);
     });
 
     // 학생 원문 위에 교사 보완본을 덮어 최종 자료를 만든다.

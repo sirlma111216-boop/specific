@@ -10,6 +10,8 @@ export interface AuthContext {
   role: Role;
   classId: string | null;
   rosterId: string | null;
+  /** 연수용 테스트 계정인가. 활동 노출 범위를 가르는 기준이다. */
+  isTest: boolean;
 }
 
 /**
@@ -42,6 +44,7 @@ export async function getAuthContext(req: Request): Promise<AuthContext> {
     role: user.role,
     classId: user.classId ?? null,
     rosterId: user.rosterId ?? null,
+    isTest: Boolean(user.isTest),
   };
 }
 

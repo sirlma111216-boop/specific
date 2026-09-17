@@ -3,6 +3,7 @@ import { adminDb, COL, noteId, responseId } from "@/lib/firebase/admin";
 import { badRequest, forbidden, notFound } from "@/lib/api-error";
 import { requireStudent } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
+import { eventVisibleTo } from "@/lib/events/visibility";
 import { canWriteNow, isPastDue } from "@/lib/events/phase";
 import { materialDelta, rosterCountField } from "@/lib/events/counters";
 import {
@@ -33,6 +34,8 @@ export async function POST(req: Request) {
     const eventSnap = await db.collection(COL.events).doc(eventId).get();
     if (!eventSnap.exists) throw notFound("활동을 찾을 수 없습니다.");
     const event = eventSnap.data() as EventDoc;
+    // 화면에 안 보이는 활동에 API로 직접 답을 넣는 경로를 막는다.
+    if (!eventVisibleTo(event, ctx.isTest)) throw notFound("활동을 찾을 수 없습니다.");
 
     const today = todayInKST();
 

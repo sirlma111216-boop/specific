@@ -6,7 +6,9 @@ import { Input, Select, Textarea } from "@/components/ui/field";
 import { Alert, Badge, Card } from "@/components/ui/surface";
 import { apiFetch, errorMessage } from "@/lib/client/api";
 import {
+  defaultMinLength,
   isChoiceType,
+  MAX_MIN_LENGTH,
   MAX_OPTIONS,
   MAX_QUESTIONS,
   QUESTION_TYPE_LABEL,
@@ -24,7 +26,42 @@ function newQuestion(index: number): FormQuestion {
     label: "",
     required: true,
     options: [],
+    minLength: defaultMinLength("long"),
   };
+}
+
+/** 문항 카드 위 도구 버튼. 글자가 세로로 접히지 않게 폭을 고정하고 테두리로 구분한다. */
+function ToolButton({
+  children,
+  onClick,
+  disabled,
+  tone = "neutral",
+  title,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  tone?: "neutral" | "danger";
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+      className={cn(
+        "inline-flex h-9 shrink-0 items-center gap-1 rounded-sm border px-3 text-[13px] font-medium whitespace-nowrap transition-colors",
+        "disabled:cursor-not-allowed disabled:opacity-35",
+        tone === "danger"
+          ? "border-hairline bg-canvas text-coral active:bg-surface-soft"
+          : "border-hairline bg-canvas text-body active:bg-surface-soft",
+      )}
+    >
+      {children}
+    </button>
+  );
 }
 
 /** 관리자가 학생 응답 양식을 만드는 편집기. 구글 폼처럼 질문을 쌓아 올린다. */
@@ -51,7 +88,12 @@ export function FormBuilder({
         if (i !== index) return q;
         // 객관식으로 바꾸면 빈 선택지 두 칸을 미리 만들어 준다.
         const options = isChoiceType(type) && q.options.length === 0 ? ["", ""] : q.options;
-        return { ...q, type, options: isChoiceType(type) ? options : [] };
+        return {
+          ...q,
+          type,
+          options: isChoiceType(type) ? options : [],
+          minLength: defaultMinLength(type),
+        };
       }),
     );
     setNotice(null);
@@ -65,6 +107,15 @@ export function FormBuilder({
       [next[index], next[target]] = [next[target], next[index]];
       return next;
     });
+    setNotice(null);
+  }
+
+  function remove(index: number) {
+    const q = questions[index];
+    if (q.label.trim() && !window.confirm(`${index + 1}번 질문을 삭제할까요?\n"${q.label.trim()}"`)) {
+      return;
+    }
+    setQuestions((prev) => prev.filter((_, x) => x !== index));
     setNotice(null);
   }
 
@@ -104,57 +155,56 @@ export function FormBuilder({
       <div className="space-y-3">
         {questions.map((q, i) => (
           <Card key={q.id} className="p-5">
-            <div className="mb-3 flex items-center gap-2">
+            {/* 1행: 번호 · 유형 · 필수 / 도구 버튼. 좁은 화면에서는 도구가 아래 줄로 내려간다. */}
+            <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
               <Badge tone="muted">{i + 1}번</Badge>
-              <Select
-                aria-label={`${i + 1}번 질문 유형`}
-                value={q.type}
-                onChange={(e) => changeType(i, e.target.value as QuestionType)}
-                className="h-9 w-auto text-[13px]"
-              >
-                {(Object.keys(QUESTION_TYPE_LABEL) as QuestionType[]).map((t) => (
-                  <option key={t} value={t}>
-                    {QUESTION_TYPE_LABEL[t]}
-                  </option>
-                ))}
-              </Select>
+              {/* 입력 부품은 w-full 이라 감싸서 폭을 정한다 */}
+              <div className="w-[180px]">
+                <Select
+                  aria-label={`${i + 1}번 질문 유형`}
+                  value={q.type}
+                  onChange={(e) => changeType(i, e.target.value as QuestionType)}
+                  className="h-9 text-[13px]"
+                >
+                  {(Object.keys(QUESTION_TYPE_LABEL) as QuestionType[]).map((t) => (
+                    <option key={t} value={t}>
+                      {QUESTION_TYPE_LABEL[t]}
+                    </option>
+                  ))}
+                </Select>
+              </div>
 
-              <label className="flex cursor-pointer items-center gap-1.5 text-[13px] text-body">
+              <label
+                className={cn(
+                  "inline-flex h-9 cursor-pointer items-center gap-2 rounded-sm border px-3 text-[13px] font-medium whitespace-nowrap select-none",
+                  q.required
+                    ? "border-ink bg-ink text-white"
+                    : "border-hairline bg-canvas text-body",
+                )}
+              >
                 <input
                   type="checkbox"
                   checked={q.required}
                   onChange={(e) => update(i, { required: e.target.checked })}
-                  className="h-4 w-4 accent-[#181d26]"
+                  className="h-4 w-4 accent-white"
                 />
-                필수
+                필수 응답
               </label>
 
-              <div className="ml-auto flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => move(i, -1)}
-                  disabled={i === 0}
-                  className="px-2 py-1 text-[13px] text-muted disabled:opacity-30"
-                  aria-label="위로"
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
+              <div className="ml-auto flex items-center gap-1.5">
+                <ToolButton onClick={() => move(i, -1)} disabled={i === 0} title="위로 옮기기">
+                  <span aria-hidden>↑</span> 위로
+                </ToolButton>
+                <ToolButton
                   onClick={() => move(i, 1)}
                   disabled={i === questions.length - 1}
-                  className="px-2 py-1 text-[13px] text-muted disabled:opacity-30"
-                  aria-label="아래로"
+                  title="아래로 옮기기"
                 >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuestions((prev) => prev.filter((_, x) => x !== i))}
-                  className="px-2 py-1 text-[13px] text-muted"
-                >
+                  <span aria-hidden>↓</span> 아래로
+                </ToolButton>
+                <ToolButton onClick={() => remove(i)} tone="danger" title="이 질문 삭제">
                   삭제
-                </button>
+                </ToolButton>
               </div>
             </div>
 
@@ -165,6 +215,37 @@ export function FormBuilder({
               placeholder="학생에게 물어볼 내용을 적어주세요"
               aria-label={`${i + 1}번 질문 내용`}
             />
+
+            {!isChoiceType(q.type) && (
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-body">
+                <label htmlFor={`min-${q.id}`} className="whitespace-nowrap">
+                  최소 글자 수
+                </label>
+                <div className="w-24">
+                  <Input
+                    id={`min-${q.id}`}
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={MAX_MIN_LENGTH}
+                    value={q.minLength ?? defaultMinLength(q.type)}
+                    onChange={(e) =>
+                      update(i, {
+                        minLength: Math.min(
+                          MAX_MIN_LENGTH,
+                          Math.max(0, Math.round(Number(e.target.value) || 0)),
+                        ),
+                      })
+                    }
+                    className="h-9 text-[13px]"
+                  />
+                </div>
+                <span className="text-muted">
+                  자 이상 써야 제출됩니다. 0이면 제한 없음.
+                  {q.type === "long" && ` 서술형 기본값은 ${defaultMinLength("long")}자입니다.`}
+                </span>
+              </div>
+            )}
 
             {isChoiceType(q.type) && (
               <div className="mt-3 space-y-2">
@@ -188,16 +269,12 @@ export function FormBuilder({
                       className="h-9 text-[13px]"
                       aria-label={`${i + 1}번 질문 선택지 ${oi + 1}`}
                     />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        update(i, { options: q.options.filter((_, x) => x !== oi) })
-                      }
-                      className="shrink-0 px-1 text-[13px] text-muted"
-                      aria-label="선택지 삭제"
+                    <ToolButton
+                      onClick={() => update(i, { options: q.options.filter((_, x) => x !== oi) })}
+                      title="선택지 삭제"
                     >
                       ✕
-                    </button>
+                    </ToolButton>
                   </div>
                 ))}
                 {q.options.length < MAX_OPTIONS && (

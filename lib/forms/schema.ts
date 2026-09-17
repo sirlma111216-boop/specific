@@ -14,6 +14,11 @@ export interface FormQuestion {
   required: boolean;
   /** single / multiple 에서만 쓴다 */
   options: string[];
+  /**
+   * 주관식 최소 글자 수(공백 포함). 날림으로 몇 글자만 쓰는 것을 막는다.
+   * 서술형은 기본 30자, 단답형은 기본 0자. 저장된 값이 없으면 resolveForm 이 기본값을 채운다.
+   */
+  minLength?: number;
 }
 
 /** 주관식은 문자열, 객관식(복수)은 문자열 배열 */
@@ -30,6 +35,22 @@ export const QUESTION_TYPE_LABEL: Record<QuestionType, string> = {
 export const MAX_QUESTIONS = 15;
 export const MAX_OPTIONS = 10;
 export const MAX_ANSWER_LENGTH = 2000;
+/** 서술형 기본 최소 글자 수. 관리자가 문항마다 바꿀 수 있다. */
+export const DEFAULT_MIN_LENGTH = 30;
+export const MAX_MIN_LENGTH = 1000;
+
+/** 유형별 기본 최소 글자 수. 객관식은 해당 없음. */
+export function defaultMinLength(type: QuestionType): number {
+  return type === "long" ? DEFAULT_MIN_LENGTH : 0;
+}
+
+/** 저장된 minLength 를 정리한다. 없으면 유형 기본값, 있으면 0~MAX 사이 정수. */
+export function resolveMinLength(q: Pick<FormQuestion, "type" | "minLength">): number {
+  if (isChoiceType(q.type)) return 0;
+  const raw = q.minLength;
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return defaultMinLength(q.type);
+  return Math.min(MAX_MIN_LENGTH, Math.max(0, Math.round(raw)));
+}
 
 /** 기본 자유 서술 질문. 양식을 따로 만들지 않은 활동에 쓰인다. */
 export const DEFAULT_QUESTION_ID = "reflection";
@@ -44,14 +65,18 @@ export function defaultForm(): FormQuestion[] {
       label: DEFAULT_QUESTION_LABEL,
       required: true,
       options: [],
+      minLength: DEFAULT_MIN_LENGTH,
     },
   ];
 }
 
-/** 저장된 값이 비었거나 깨져 있으면 기본 양식으로 되돌린다. */
+/**
+ * 저장된 값이 비었거나 깨져 있으면 기본 양식으로 되돌리고,
+ * 최소 글자 수가 없는 옛 문항에는 유형 기본값을 채운다.
+ */
 export function resolveForm(raw: FormQuestion[] | undefined | null): FormQuestion[] {
   if (!Array.isArray(raw) || raw.length === 0) return defaultForm();
-  return raw;
+  return raw.map((q) => ({ ...q, minLength: resolveMinLength(q) }));
 }
 
 export function isChoiceType(type: QuestionType): boolean {
@@ -130,8 +155,15 @@ export function validateAnswers(
       errors[q.id] = "내용을 입력해주세요.";
       continue;
     }
-    if (Array.from(text).length > MAX_ANSWER_LENGTH) {
+    const length = Array.from(text).length;
+    if (length > MAX_ANSWER_LENGTH) {
       errors[q.id] = `${MAX_ANSWER_LENGTH}자 이내로 작성해주세요.`;
+      continue;
+    }
+    // 비워도 되는 문항은 비운 채로 통과하지만, 쓰기 시작했으면 최소 글자 수를 채워야 한다.
+    const min = resolveMinLength(q);
+    if (text !== "" && length < min) {
+      errors[q.id] = `${min}자 이상 작성해주세요. (지금 ${length}자)`;
     }
   }
 

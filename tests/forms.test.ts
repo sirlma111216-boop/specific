@@ -71,9 +71,40 @@ describe("답변 검증", () => {
     expect(r.errors.q1).toContain("하나만");
   });
 
-  it("정상 응답은 통과", () => {
-    const r = validateAnswers(FORM, { q1: "강의", q2: ["신고 방법"], q3: "실천하겠다", q4: "요약" });
+  it("정상 응답은 통과 (서술형은 기본 30자 이상)", () => {
+    const r = validateAnswers(FORM, {
+      q1: "강의",
+      q2: ["신고 방법"],
+      q3: "친구가 힘들어 보이면 먼저 다가가 말을 걸고, 사소한 장난도 상대 입장에서 생각하겠다.",
+      q4: "요약",
+    });
     expect(r.ok).toBe(true);
+  });
+
+  it("서술형은 기본 30자 미만이면 막힌다", () => {
+    const r = validateAnswers(FORM, { q1: "강의", q3: "실천하겠다" });
+    expect(r.ok).toBe(false);
+    expect(r.errors.q3).toContain("30자 이상");
+  });
+
+  it("최소 글자 수는 문항마다 바꿀 수 있고 0이면 제한이 없다", () => {
+    const loose = FORM.map((q) => (q.id === "q3" ? { ...q, minLength: 0 } : q));
+    expect(validateAnswers(loose, { q1: "강의", q3: "실천하겠다" }).ok).toBe(true);
+    const strict = FORM.map((q) => (q.id === "q4" ? { ...q, minLength: 10 } : q));
+    const r = validateAnswers(strict, { q1: "강의", q3: "친구가 힘들어 보이면 먼저 다가가 말을 걸고 상대 입장에서 생각하겠다.", q4: "요약" });
+    expect(r.errors.q4).toContain("10자 이상");
+  });
+
+  it("비워도 되는 서술형은 비운 채로 통과한다", () => {
+    const optional = FORM.map((q) => (q.id === "q3" ? { ...q, required: false } : q));
+    expect(validateAnswers(optional, { q1: "강의" }).ok).toBe(true);
+  });
+
+  it("옛 양식에 최소 글자 수가 없으면 유형 기본값을 채운다", () => {
+    const resolved = resolveForm(FORM);
+    expect(resolved.find((q) => q.id === "q3")?.minLength).toBe(30);
+    expect(resolved.find((q) => q.id === "q4")?.minLength).toBe(0);
+    expect(resolved.find((q) => q.id === "q1")?.minLength).toBe(0);
   });
 
   it("너무 긴 답변은 거부한다", () => {

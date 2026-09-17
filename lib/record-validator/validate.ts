@@ -10,7 +10,8 @@ export type IssueCode =
   | "missing_date"
   | "officer_missing"
   | "foreign_script"
-  | "observer_voice";
+  | "observer_voice"
+  | "connective_word";
 
 export interface ValidationIssue {
   code: IssueCode;
@@ -81,6 +82,28 @@ const FORBIDDEN_PROPER_NOUNS = ["대학교", "주식회사", "㈜", "학원", "�
 const HANJA_RE = new RegExp("[\\u3400-\\u4DBF\\u4E00-\\u9FFF\\uF900-\\uFAFF]", "gu");
 const KANA_RE = new RegExp("[\\u3040-\\u30FF]", "gu");
 const FULLWIDTH_RE = new RegExp("[\\u3000-\\u303F\\uFF01-\\uFF60]", "gu");
+
+/* ── 검증 11: 활동 사이 접속 표현 ────────────────────────
+   "또한 안전교육에 참여하여…"처럼 다음 활동을 접속어로 시작하는 문장을 잡는다.
+   생기부는 활동별 독립 서술을 이어 붙이는 문서라 이런 연결어가 어색하다. */
+const CONNECTIVE_STARTS = [
+  "또한",
+  "그리고",
+  "더불어",
+  "아울러",
+  "한편",
+  "이어서",
+  "이와 함께",
+  "이에 더해",
+  "다음으로",
+  "뿐만 아니라",
+];
+
+/** 문장이 활동 연결어로 시작하는지. 앞의 따옴표·공백은 무시한다. */
+export function startsWithConnective(sentence: string): boolean {
+  const s = sentence.trim().replace(/^["'“”‘’]+/, "").trimStart();
+  return CONNECTIVE_STARTS.some((w) => s.startsWith(w));
+}
 
 /* ── 검증 10: 교사 관찰자 시점 종결 ──────────────────────
    '~함/~임/~음'은 종결어미 규칙(검증 3)만 만족시킬 뿐, '인식함/성찰함'처럼
@@ -315,6 +338,19 @@ export function validateRecordDraft(input: ValidationInput): ValidationResult {
           `특히 다음 문장을 고쳐라: "${plain[0]}".`,
       });
     }
+  }
+
+  // 검증 11 — 활동 사이 접속 표현
+  const connective = sentences.filter((s) => startsWithConnective(s));
+  if (connective.length > 0) {
+    issues.push({
+      code: "connective_word",
+      message: `활동을 잇는 접속 표현으로 시작하는 문장이 ${connective.length}개 있습니다.`,
+      instruction:
+        `'또한', '그리고', '더불어', '아울러', '한편', '이어서' 같은 접속 표현으로 문장을 시작하지 마라. ` +
+        `다음 활동으로 넘어갈 때는 접속어 없이 활동명으로 바로 시작하라. ` +
+        `특히 다음 문장을 고쳐라: "${connective[0]}".`,
+    });
   }
 
   return { ok: issues.length === 0, characterCount, issues };

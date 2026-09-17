@@ -31,7 +31,8 @@ export async function GET(req: Request) {
     const classes = listRegisteredClasses(
       snap.docs
         .map((d) => d.data() as ClassDoc)
-        .filter((c) => normalizeSchoolName(c.schoolName) === school)
+        // 연수용 테스트 학급은 실제 학생 가입 목록에 내놓지 않는다.
+        .filter((c) => normalizeSchoolName(c.schoolName) === school && !c.isTest)
         .map((c) => ({ grade: c.grade, classNumber: c.classNumber })),
     );
 

@@ -3,6 +3,7 @@ import { adminDb, COL, noteId } from "@/lib/firebase/admin";
 import { badRequest, notFound } from "@/lib/api-error";
 import { requireTeacherWithClass } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
+import { eventVisibleTo } from "@/lib/events/visibility";
 import { MAX_REFLECTION_LENGTH } from "@/lib/events/defaults";
 import { materialDelta, rosterCountField } from "@/lib/events/counters";
 import { countCharacters } from "@/lib/utils";
@@ -46,6 +47,7 @@ export async function POST(req: Request) {
     const event = eventSnap.data() as EventDoc;
     // 활동은 학교 전체 공통이므로 학급 확인은 학생 쪽만 한다.
     if (roster.classId !== ctx.classId) throw notFound("학생을 찾을 수 없습니다.");
+    if (!eventVisibleTo(event, ctx.isTest)) throw notFound("활동을 찾을 수 없습니다.");
 
     const id = noteId(eventId, rosterId);
     const ref = db.collection(COL.notes).doc(id);

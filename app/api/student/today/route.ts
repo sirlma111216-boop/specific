@@ -2,6 +2,7 @@ import { adminDb, COL } from "@/lib/firebase/admin";
 import { requireStudent } from "@/lib/auth/server";
 import { route } from "@/lib/route-helpers";
 import { computeEventPhase } from "@/lib/events/phase";
+import { eventVisibleTo } from "@/lib/events/visibility";
 import { resolveForm } from "@/lib/forms/schema";
 import { todayInKST } from "@/lib/utils";
 import type { EventDoc, ResponseDoc, StudentEventItem } from "@/lib/types";
@@ -29,6 +30,8 @@ export async function GET(req: Request) {
 
     const pending: StudentEventItem[] = eventSnap.docs
       .map((d) => d.data() as EventDoc)
+      // 테스트 활동은 테스트 계정에게만, 실제 활동은 실제 계정에게만.
+      .filter((e) => eventVisibleTo(e, ctx.isTest))
       .map((e) => {
         const mine = myResponses.get(e.eventId);
         const hasResponse = Boolean(mine?.content?.trim());

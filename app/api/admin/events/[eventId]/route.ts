@@ -3,31 +3,27 @@ import { adminDb, COL } from "@/lib/firebase/admin";
 import { badRequest, notFound } from "@/lib/api-error";
 import { requireAdmin } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
-import {
-  isChoiceType,
-  MAX_OPTIONS,
-  MAX_QUESTIONS,
-  resolveForm,
-  validateForm,
-  type FormQuestion,
-  type QuestionType,
-} from "@/lib/forms/schema";
+import { resolveForm } from "@/lib/forms/schema";
+import { sanitizeForm } from "@/lib/forms/sanitize-server";
 import { commitInChunks } from "@/lib/firebase/batch";
 import { rosterCountField } from "@/lib/events/counters";
+import { rostersWithMaterialFor } from "@/lib/events/material";
 import { isValidIsoDate } from "@/lib/utils";
-import type { EventDoc, EventStatus, ResponseDoc, TeacherNoteDoc } from "@/lib/types";
+import type { Category, EventDoc, EventStatus } from "@/lib/types";
 
 interface PatchBody {
   title?: string;
+  category?: string;
   description?: string;
   guidance?: string;
   eventDate?: string;
   status?: string;
+  isTest?: boolean;
   form?: unknown;
 }
 
+const CATEGORIES: Category[] = ["autonomous", "career"];
 const STATUSES: EventStatus[] = ["scheduled", "open", "closed"];
-const TYPES: QuestionType[] = ["short", "long", "single", "multiple"];
 
 async function loadEvent(eventId: string) {
   const ref = adminDb().collection(COL.events).doc(eventId);
@@ -36,44 +32,19 @@ async function loadEvent(eventId: string) {
   return { ref, event: snap.data() as EventDoc };
 }
 
-/** 클라이언트가 보낸 양식을 신뢰하지 않고 서버에서 다시 만든다. */
-function sanitizeForm(raw: unknown): FormQuestion[] {
-  if (!Array.isArray(raw)) throw badRequest("양식 형식이 올바르지 않습니다.");
-  if (raw.length > MAX_QUESTIONS) {
-    throw badRequest(`질문은 최대 ${MAX_QUESTIONS}개까지 만들 수 있습니다.`);
-  }
-
-  const questions: FormQuestion[] = raw.map((item, i) => {
-    const q = (item ?? {}) as Partial<FormQuestion>;
-    const type = TYPES.includes(q.type as QuestionType) ? (q.type as QuestionType) : "long";
-    const id = String(q.id ?? "").trim() || `q${i + 1}`;
-    const options = isChoiceType(type)
-      ? (Array.isArray(q.options) ? q.options : [])
-          .map((o) => String(o).trim())
-          .filter(Boolean)
-          .slice(0, MAX_OPTIONS)
-      : [];
-    return {
-      id,
-      type,
-      label: String(q.label ?? "").trim(),
-      required: Boolean(q.required),
-      options,
-    };
-  });
-
-  const errors = validateForm(questions);
-  if (errors.length > 0) throw badRequest(errors.join("\n"), "form_invalid");
-  return questions;
-}
-
-/** 활동 수정 · 양식 저장 · 지금 공개 · 마감 · 다시 열기 */
+/**
+ * 활동 수정. 기본 정보(제목·영역·날짜·설명·안내문), 공개 상태, 테스트 여부, 양식.
+ *
+ * 영역(자율↔진로)을 바꾸면 이 활동에 기록이 있는 학생들의 자율/진로 기록 수 카운터를
+ * 옛 영역에서 새 영역으로 옮긴다. 안 옮기면 교사 학생 목록의 숫자가 어긋난다.
+ */
 export async function PATCH(req: Request, { params }: { params: Promise<{ eventId: string }> }) {
   return route(async () => {
     await requireAdmin(req);
     const { eventId } = await params;
-    const { ref } = await loadEvent(eventId);
+    const { ref, event } = await loadEvent(eventId);
     const body = await readJson<PatchBody>(req);
+    const db = adminDb();
 
     const update: Partial<EventDoc> = { updatedAt: Date.now() };
 
@@ -94,14 +65,37 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ eventI
       }
       update.status = body.status as EventStatus;
     }
-    if (body.form !== undefined) {
-      update.form = sanitizeForm(body.form);
+    if (body.isTest !== undefined) update.isTest = Boolean(body.isTest);
+    if (body.form !== undefined) update.form = sanitizeForm(body.form);
+
+    let movedCounters = 0;
+    if (body.category !== undefined && body.category !== event.category) {
+      if (!CATEGORIES.includes(body.category as Category)) {
+        throw badRequest("활동 영역 값이 올바르지 않습니다.");
+      }
+      const next = body.category as Category;
+      update.category = next;
+
+      const { rosterIds } = await rostersWithMaterialFor(eventId);
+      const from = rosterCountField(event.category);
+      const to = rosterCountField(next);
+      const ops: Array<(b: FirebaseFirestore.WriteBatch) => void> = [];
+      for (const rosterId of rosterIds) {
+        ops.push((b) =>
+          b.update(db.collection(COL.roster).doc(rosterId), {
+            [from]: FieldValue.increment(-1),
+            [to]: FieldValue.increment(1),
+          }),
+        );
+      }
+      await commitInChunks(ops);
+      movedCounters = rosterIds.size;
     }
 
     await ref.update(update);
     const fresh = await ref.get();
-    const event = fresh.data() as EventDoc;
-    return { event: { ...event, form: resolveForm(event.form) } };
+    const saved = fresh.data() as EventDoc;
+    return { event: { ...saved, form: resolveForm(saved.form) }, movedCounters };
   });
 }
 
@@ -119,28 +113,13 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ event
     const { ref, event } = await loadEvent(eventId);
     const db = adminDb();
 
-    const [responses, notes] = await Promise.all([
-      db.collection(COL.responses).where("eventId", "==", eventId).get(),
-      db.collection(COL.notes).where("eventId", "==", eventId).get(),
-    ]);
-
-    // 이 활동에 "쓸 기록이 있던" 학생만 카운터를 1 내린다.
-    // 학생 원문과 교사 보완본이 둘 다 있어도 카운터에는 1로 세어져 있다.
-    const rostersWithMaterial = new Set<string>();
-    responses.forEach((d) => {
-      const r = d.data() as ResponseDoc;
-      if (r.content?.trim()) rostersWithMaterial.add(r.rosterId);
-    });
-    notes.forEach((d) => {
-      const n = d.data() as TeacherNoteDoc;
-      if (n.content?.trim()) rostersWithMaterial.add(n.rosterId);
-    });
+    const { rosterIds, responses, notes } = await rostersWithMaterialFor(eventId);
 
     const countField = rosterCountField(event.category);
     const ops: Array<(batch: FirebaseFirestore.WriteBatch) => void> = [];
     responses.forEach((d) => ops.push((b) => b.delete(d.ref)));
     notes.forEach((d) => ops.push((b) => b.delete(d.ref)));
-    for (const rosterId of rostersWithMaterial) {
+    for (const rosterId of rosterIds) {
       ops.push((b) =>
         b.update(db.collection(COL.roster).doc(rosterId), {
           [countField]: FieldValue.increment(-1),
@@ -155,7 +134,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ event
       ok: true,
       deletedResponses: responses.size,
       deletedNotes: notes.size,
-      affectedStudents: rostersWithMaterial.size,
+      affectedStudents: rosterIds.size,
     };
   });
 }

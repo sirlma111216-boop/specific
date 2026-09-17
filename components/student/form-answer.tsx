@@ -4,10 +4,23 @@ import { Input, Textarea } from "@/components/ui/field";
 import {
   isSingleFreeText,
   MAX_ANSWER_LENGTH,
+  resolveMinLength,
   type FormAnswers,
   type FormQuestion,
 } from "@/lib/forms/schema";
-import { countCharacters } from "@/lib/utils";
+import { cn, countCharacters } from "@/lib/utils";
+
+/** 글자 수 안내. 최소 글자 수가 있으면 채울 때까지 강조해서 보여준다. */
+function LengthHint({ text, min }: { text: string; min: number }) {
+  const n = countCharacters(text);
+  const short = min > 0 && n < min;
+  return (
+    <p className={cn("mt-1 text-right text-[13px]", short ? "text-coral" : "text-muted")}>
+      {min > 0 ? `${n}자 / 최소 ${min}자` : `${n}자`}
+      {short && ` — ${min - n}자 더 써주세요`}
+    </p>
+  );
+}
 
 /**
  * 관리자가 만든 양식을 학생 화면에 그린다.
@@ -31,6 +44,7 @@ export function FormAnswerFields({
       {questions.map((q, i) => {
         const value = answers[q.id];
         const error = errors[q.id];
+        const min = resolveMinLength(q);
 
         return (
           <div key={q.id}>
@@ -52,20 +66,21 @@ export function FormAnswerFields({
                   aria-label={q.label}
                   className="text-[16px]"
                 />
-                <p className="mt-1 text-right text-[13px] text-muted">
-                  {countCharacters(String(value ?? ""))} / {MAX_ANSWER_LENGTH}자
-                </p>
+                <LengthHint text={String(value ?? "")} min={min} />
               </>
             )}
 
             {q.type === "short" && (
-              <Input
-                value={String(value ?? "")}
-                onChange={(e) => onChange(q.id, e.target.value)}
-                placeholder="한 줄로 답해주세요"
-                aria-label={q.label}
-                className="text-[16px]"
-              />
+              <>
+                <Input
+                  value={String(value ?? "")}
+                  onChange={(e) => onChange(q.id, e.target.value)}
+                  placeholder="한 줄로 답해주세요"
+                  aria-label={q.label}
+                  className="text-[16px]"
+                />
+                {min > 0 && <LengthHint text={String(value ?? "")} min={min} />}
+              </>
             )}
 
             {q.type === "single" && (

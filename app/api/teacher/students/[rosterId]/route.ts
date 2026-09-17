@@ -3,6 +3,7 @@ import { notFound } from "@/lib/api-error";
 import { requireTeacherWithClass } from "@/lib/auth/server";
 import { route } from "@/lib/route-helpers";
 import { mergeReflection } from "@/lib/events/reflection";
+import { eventVisibleTo } from "@/lib/events/visibility";
 import type {
   Category,
   EventDoc,
@@ -56,6 +57,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ rosterId
 
     const all = eventSnap.docs
       .map((d) => d.data() as EventDoc)
+      .filter((e) => eventVisibleTo(e, ctx.isTest))
       .sort((a, b) => a.eventDate.localeCompare(b.eventDate))
       .map<TeacherEventWithResponse>((e) => ({
         eventId: e.eventId,
