@@ -90,12 +90,18 @@ export async function POST(req: Request) {
       if (n.content?.trim()) reflections.set(n.eventId, n.content.trim());
     });
 
+    // 담임이 결석으로 표시한 활동은 화면에서 체크가 막히지만, 서버에서도 한 번 더 막는다.
+    const absent = new Set(roster.absentEventIds ?? []);
+
     const events: SelectableEvent[] = [];
     for (const id of selectedEventIds) {
       const e = eventById.get(id);
       if (!e) throw badRequest("선택한 활동 중 찾을 수 없는 항목이 있습니다.");
       if (e.category !== category) {
         throw badRequest("다른 영역의 활동이 섞여 있습니다. 자율/진로를 나누어 생성해주세요.");
+      }
+      if (absent.has(id)) {
+        throw badRequest(`결석으로 표시한 활동(${e.title})은 반영할 수 없습니다. 체크를 풀어주세요.`);
       }
       const reflection = reflections.get(id) ?? "";
       events.push({

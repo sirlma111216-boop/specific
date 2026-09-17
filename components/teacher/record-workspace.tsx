@@ -81,9 +81,10 @@ export function RecordWorkspace({
   // 체크한 순서를 그대로 보존한다. 해제하면 뒤 순번이 자동으로 당겨진다.
   // 관리자가 활동을 지웠을 수 있으므로, 지금 남아 있는 활동만 복원한다.
   // (없는 id가 남으면 화면에는 안 보이는데 생성 요청에서 오류가 난다)
+  // 저장 뒤에 결석으로 표시한 활동도 체크할 수 없으므로 복원하지 않는다.
   const [selected, setSelected] = useState<string[]>(() => {
-    const alive = new Set(events.map((e) => e.eventId));
-    return (savedRecord?.selectedEventIds ?? []).filter((id) => alive.has(id));
+    const selectable = new Set(events.filter((e) => !e.absent).map((e) => e.eventId));
+    return (savedRecord?.selectedEventIds ?? []).filter((id) => selectable.has(id));
   });
   const [targetLength, setTargetLength] = useState(
     savedRecord?.targetLength || DEFAULT_TARGET_LENGTH,
@@ -94,6 +95,7 @@ export function RecordWorkspace({
   const [draftText, setDraftText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
   const [showOriginal, setShowOriginal] = useState<string | null>(null);
+  const [savingAbsence, setSavingAbsence] = useState<string | null>(null);
 
   const [result, setResult] = useState<GenerateResponse | null>(null);
   const [draft, setDraft] = useState(savedRecord?.editedText ?? "");
@@ -138,6 +140,27 @@ export function RecordWorkspace({
       setError(errorMessage(err));
     } finally {
       setSavingNote(false);
+    }
+  }
+
+  async function toggleAbsent(item: TeacherEventWithResponse) {
+    const absent = !item.absent;
+    setSavingAbsence(item.eventId);
+    setError(null);
+    try {
+      await apiFetch("/api/teacher/absence", {
+        method: "POST",
+        body: JSON.stringify({ rosterId, eventId: item.eventId, absent }),
+      });
+      setItems((prev) =>
+        prev.map((it) => (it.eventId === item.eventId ? { ...it, absent } : it)),
+      );
+      // 결석한 활동은 특기사항에 넣지 않는다. 이미 체크돼 있었다면 함께 푼다.
+      if (absent) setSelected((prev) => prev.filter((id) => id !== item.eventId));
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSavingAbsence(null);
     }
   }
 
@@ -249,25 +272,49 @@ export function RecordWorkspace({
                     id={checkboxId}
                     type="checkbox"
                     checked={checked}
+                    disabled={event.absent}
                     onChange={() => toggle(event.eventId)}
-                    className="mt-1 h-4 w-4 shrink-0 accent-[#181d26]"
+                    title={event.absent ? "결석한 활동은 선택할 수 없습니다." : undefined}
+                    className="mt-1 h-4 w-4 shrink-0 accent-[#181d26] disabled:cursor-not-allowed disabled:opacity-40"
                   />
                   <div className="min-w-0 flex-1">
-                    <label
-                      htmlFor={checkboxId}
-                      className="flex cursor-pointer flex-wrap items-center gap-2"
-                    >
-                      {checked && (
-                        <span className="text-[16px] leading-none text-ink">
-                          {circledNumber(order)}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label
+                        htmlFor={checkboxId}
+                        className={cn(
+                          "flex flex-wrap items-center gap-2",
+                          event.absent ? "cursor-not-allowed" : "cursor-pointer",
+                        )}
+                      >
+                        {checked && (
+                          <span className="text-[16px] leading-none text-ink">
+                            {circledNumber(order)}
+                          </span>
+                        )}
+                        <span className="text-[13px] text-muted">
+                          {formatDateShort(event.eventDate)}
                         </span>
-                      )}
-                      <span className="text-[13px] text-muted">
-                        {formatDateShort(event.eventDate)}
-                      </span>
-                      <span className="text-[15px] font-medium text-ink">{event.title}</span>
-                      <Badge tone={badge.tone}>{badge.label}</Badge>
-                    </label>
+                        <span className="text-[15px] font-medium text-ink">{event.title}</span>
+                        <Badge tone={badge.tone}>{badge.label}</Badge>
+                      </label>
+
+                      {/* 체크박스 label 밖에 둬야 눌러도 체크가 같이 바뀌지 않는다 */}
+                      <button
+                        type="button"
+                        title={
+                          event.absent
+                            ? "누르면 결석 표시를 풉니다."
+                            : "이 활동에 결석했다면 눌러주세요. 체크할 수 없게 됩니다."
+                        }
+                        disabled={savingAbsence === event.eventId}
+                        onClick={() => toggleAbsent(event)}
+                        className="cursor-pointer rounded-sm disabled:cursor-wait disabled:opacity-60"
+                      >
+                        <Badge tone={event.absent ? "danger" : "muted"}>
+                          {event.absent ? "결석" : "결석확인"}
+                        </Badge>
+                      </button>
+                    </div>
 
                     {isEditing ? (
                       <div className="mt-3">

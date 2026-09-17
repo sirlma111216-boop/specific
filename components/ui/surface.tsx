@@ -38,7 +38,7 @@ export function DarkCard({ children, className }: { children: ReactNode; classNa
   );
 }
 
-type Tone = "neutral" | "success" | "muted" | "coral" | "info";
+type Tone = "neutral" | "success" | "muted" | "coral" | "info" | "danger";
 
 const TONES: Record<Tone, string> = {
   neutral: "bg-surface-strong text-ink",
@@ -46,6 +46,8 @@ const TONES: Record<Tone, string> = {
   muted: "bg-surface-soft text-muted border border-hairline",
   coral: "bg-coral text-white",
   info: "bg-cream text-ink",
+  // muted 와 테두리 두께를 맞춰, 둘 사이를 오갈 때 크기가 흔들리지 않게 한다.
+  danger: "bg-danger text-white border border-danger",
 };
 
 export function Badge({

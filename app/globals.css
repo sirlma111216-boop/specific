@@ -35,6 +35,8 @@
   --color-info-border: #458fff;
   --color-success: #006400;
   --color-success-border: #39bf45;
+  /* 결석 표시. coral(산화철 빛)은 경고 문구에 쓰이므로, 한눈에 구분되는 선명한 빨강을 따로 둔다. */
+  --color-danger: #dc2626;
 
   --radius-xs: 2px;
   --radius-sm: 6px;

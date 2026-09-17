@@ -110,6 +110,12 @@ export interface RosterDoc {
    * 학기별로 여러 건일 수 있다. (1학기 회장 + 2학기 부회장 등)
    */
   officerTerms?: OfficerTerm[];
+  /**
+   * 담임이 결석으로 표시한 활동 id.
+   * 결석한 활동은 교사 화면에서 체크할 수 없고, 특기사항 생성에도 들어가지 않는다.
+   * 학생 상세·생성 화면이 이미 이 문서를 읽으므로 따로 컬렉션을 두지 않는다(추가 읽기 0).
+   */
+  absentEventIds?: string[];
 }
 
 /**
@@ -245,4 +251,6 @@ export interface TeacherEventWithResponse {
   /** 학생이 직접 쓴 원문. 없으면 빈 문자열 */
   studentOriginal: string;
   source: ReflectionSource;
+  /** 담임이 결석으로 표시했는가 */
+  absent: boolean;
 }

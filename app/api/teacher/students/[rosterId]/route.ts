@@ -55,6 +55,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ rosterId
       if (n.content?.trim()) teacherText.set(n.eventId, n.content.trim());
     });
 
+    const absent = new Set(roster.absentEventIds ?? []);
+
     const all = allEvents
       .filter((e) => eventVisibleTo(e, ctx.isTest))
       .sort((a, b) => a.eventDate.localeCompare(b.eventDate))
@@ -66,6 +68,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ rosterId
         eventDate: e.eventDate,
         status: e.status,
         ...mergeReflection(studentText.get(e.eventId) ?? "", teacherText.get(e.eventId) ?? ""),
+        absent: absent.has(e.eventId),
       }));
 
     const events: Record<Category, TeacherEventWithResponse[]> = {

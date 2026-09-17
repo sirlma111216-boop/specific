@@ -137,6 +137,16 @@ URL이나 API 요청을 바꿔도 UI 뒤편에서 다시 막힙니다.
 
 병합 규칙은 `lib/events/reflection.ts`의 `mergeReflection()` 한 곳에 있습니다.
 
+### 결석 표시
+
+활동 배지 옆의 `결석확인`을 누르면 빨간 `결석`으로 바뀌고, 한 번 더 누르면 되돌아갑니다.
+
+- `결석`인 활동은 왼쪽 체크박스가 비활성화되어 특기사항 반영 대상으로 고를 수 없습니다.
+  이미 체크돼 있었다면 체크도 함께 풀립니다.
+- 서버(`/api/generate-record`)도 결석 활동이 섞인 생성 요청을 거절합니다.
+- 기록 입력·수정은 결석과 관계없이 그대로 할 수 있습니다.
+- 저장 위치는 `studentRoster.absentEventIds`. 학생 상세·생성 화면이 이미 읽는 문서라 읽기가 늘지 않습니다.
+
 ---
 
 ## 자치활동 임원
@@ -267,6 +277,7 @@ app/
     admin/events/[id]          수정 · 양식 저장 · 공개 · 마감 · 삭제
     auth/admin-bootstrap       지정된 관리자 계정 준비
     teacher/records            특기사항 저장
+    teacher/absence            활동 결석 표시 · 해제
     generate-record            Gemini 생성 (개인정보 제거 → 생성 → 재검증)
     student/today              지금 작성할 활동
     student/responses          소감 저장
