@@ -42,6 +42,37 @@ interface Detail {
   }>;
 }
 
+/** 원문·보완본·특기사항 공용 편집 칸 */
+function EditBox({
+  value,
+  onChange,
+  onSave,
+  onCancel,
+  busy,
+  rows = 6,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  busy: boolean;
+  rows?: number;
+}) {
+  return (
+    <div>
+      <Textarea rows={rows} value={value} onChange={(ev) => onChange(ev.target.value)} />
+      <div className="mt-2 flex gap-2">
+        <Button size="sm" loading={busy} onClick={onSave}>
+          저장
+        </Button>
+        <Button size="sm" variant="secondary" onClick={onCancel}>
+          취소
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function stamp(ms: number): string {
   const d = new Date(ms);
   const p = (n: number) => String(n).padStart(2, "0");
@@ -55,7 +86,13 @@ export default function AdminStudentPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [onlyWritten, setOnlyWritten] = useState(true);
-  const [editing, setEditing] = useState<{ responseId: string; content: string } | null>(null);
+  /** 열려 있는 편집 칸 하나. 슈퍼관리자는 무엇이든 만들고 고칠 수 있다. */
+  const [editing, setEditing] = useState<
+    | { kind: "response"; eventId: string; responseId: string | null; content: string }
+    | { kind: "note"; eventId: string; content: string }
+    | { kind: "record"; recordId: string; content: string }
+    | null
+  >(null);
   const [busy, setBusy] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const reload = () => setReloadToken((n) => n + 1);
@@ -163,83 +200,118 @@ export default function AdminStudentPage() {
 
             <div className="mt-4">
               <p className="mb-1 text-[13px] font-medium text-muted">학생 원문</p>
-              {e.response ? (
-                editing?.responseId === e.response.responseId ? (
-                  <div>
-                    <Textarea rows={6} value={editing.content} onChange={(ev) => setEditing({ ...editing, content: ev.target.value })} />
-                    <div className="mt-2 flex gap-2">
-                      <Button
-                        size="sm"
-                        loading={busy}
-                        onClick={() =>
-                          run(async () => {
-                            await apiFetch(`/api/admin/responses/${editing.responseId}`, {
-                              method: "PATCH",
-                              body: JSON.stringify({ content: editing.content }),
-                            });
-                            setEditing(null);
-                            return "학생 원문을 고쳤습니다.";
-                          })
-                        }
-                      >
-                        저장
-                      </Button>
-                      <Button size="sm" variant="secondary" onClick={() => setEditing(null)}>
-                        취소
-                      </Button>
-                    </div>
+              {editing?.kind === "response" && editing.eventId === e.eventId ? (
+                <EditBox
+                  value={editing.content}
+                  onChange={(v) => setEditing({ ...editing, content: v })}
+                  busy={busy}
+                  onCancel={() => setEditing(null)}
+                  onSave={() =>
+                    run(async () => {
+                      if (editing.responseId) {
+                        await apiFetch(`/api/admin/responses/${editing.responseId}`, {
+                          method: "PATCH",
+                          body: JSON.stringify({ content: editing.content }),
+                        });
+                      } else {
+                        await apiFetch("/api/admin/responses", {
+                          method: "POST",
+                          body: JSON.stringify({ rosterId, eventId: e.eventId, content: editing.content }),
+                        });
+                      }
+                      setEditing(null);
+                      return editing.responseId ? "학생 원문을 고쳤습니다." : "학생 원문을 추가했습니다.";
+                    })
+                  }
+                />
+              ) : e.response ? (
+                <div>
+                  <p className="prose-ko rounded-md bg-surface-soft px-4 py-3 text-[14px] whitespace-pre-wrap text-body">{e.response.content}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-3 text-[13px]">
+                    <span className="text-muted">{stamp(e.response.updatedAt)}</span>
+                    <button type="button" className="text-muted underline underline-offset-2" onClick={() => setEditing({ kind: "response", eventId: e.eventId, responseId: e.response!.responseId, content: e.response!.content })}>
+                      수정
+                    </button>
+                    <button
+                      type="button"
+                      className="text-coral underline underline-offset-2"
+                      onClick={() => {
+                        if (!window.confirm(`'${e.title}'에 대한 학생 원문을 삭제할까요?\n되돌릴 수 없습니다.`)) return;
+                        run(async () => {
+                          await apiFetch(`/api/admin/responses/${e.response!.responseId}`, { method: "DELETE" });
+                          return "학생 원문을 삭제했습니다.";
+                        });
+                      }}
+                    >
+                      삭제
+                    </button>
                   </div>
-                ) : (
-                  <div>
-                    <p className="prose-ko rounded-md bg-surface-soft px-4 py-3 text-[14px] whitespace-pre-wrap text-body">{e.response.content}</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-3 text-[13px]">
-                      <span className="text-muted">{stamp(e.response.updatedAt)}</span>
-                      <button type="button" className="text-muted underline underline-offset-2" onClick={() => setEditing({ responseId: e.response!.responseId, content: e.response!.content })}>
-                        수정
-                      </button>
-                      <button
-                        type="button"
-                        className="text-coral underline underline-offset-2"
-                        onClick={() => {
-                          if (!window.confirm(`'${e.title}'에 대한 학생 원문을 삭제할까요?\n되돌릴 수 없습니다.`)) return;
-                          run(async () => {
-                            await apiFetch(`/api/admin/responses/${e.response!.responseId}`, { method: "DELETE" });
-                            return "학생 원문을 삭제했습니다.";
-                          });
-                        }}
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  </div>
-                )
+                </div>
               ) : (
-                <p className="text-[14px] text-muted">작성하지 않음</p>
+                <div className="flex flex-wrap items-center gap-3 text-[14px]">
+                  <span className="text-muted">작성하지 않음</span>
+                  {account ? (
+                    <button type="button" className="text-[13px] text-link underline underline-offset-2" onClick={() => setEditing({ kind: "response", eventId: e.eventId, responseId: null, content: "" })}>
+                      학생 원문 추가
+                    </button>
+                  ) : (
+                    <span className="text-[13px] text-muted">(계정이 없어 원문은 만들 수 없음 — 교사 보완본을 쓰세요)</span>
+                  )}
+                </div>
               )}
             </div>
 
-            {e.note && (
-              <div className="mt-4">
-                <p className="mb-1 text-[13px] font-medium text-muted">교사 보완본</p>
-                <p className="prose-ko rounded-md border border-hairline px-4 py-3 text-[14px] whitespace-pre-wrap text-body">{e.note.content}</p>
-                <div className="mt-2 flex flex-wrap items-center gap-3 text-[13px]">
-                  <span className="text-muted">{stamp(e.note.updatedAt)}</span>
-                  <button
-                    type="button"
-                    className="text-coral underline underline-offset-2"
-                    onClick={() => {
-                      if (!window.confirm("교사 보완본을 삭제할까요? 학생 원문은 남습니다.")) return;
-                      run(async () => {
-                        await apiFetch(`/api/admin/notes/${e.note!.noteId}`, { method: "DELETE" });
-                        return "교사 보완본을 삭제했습니다.";
+            <div className="mt-4">
+              <p className="mb-1 text-[13px] font-medium text-muted">교사 보완본</p>
+              {editing?.kind === "note" && editing.eventId === e.eventId ? (
+                <EditBox
+                  value={editing.content}
+                  onChange={(v) => setEditing({ ...editing, content: v })}
+                  busy={busy}
+                  onCancel={() => setEditing(null)}
+                  onSave={() =>
+                    run(async () => {
+                      await apiFetch("/api/admin/notes", {
+                        method: "PUT",
+                        body: JSON.stringify({ rosterId, eventId: e.eventId, content: editing.content }),
                       });
-                    }}
-                  >
-                    삭제
+                      setEditing(null);
+                      return "교사 보완본을 저장했습니다.";
+                    })
+                  }
+                />
+              ) : e.note ? (
+                <div>
+                  <p className="prose-ko rounded-md border border-hairline px-4 py-3 text-[14px] whitespace-pre-wrap text-body">{e.note.content}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-3 text-[13px]">
+                    <span className="text-muted">{stamp(e.note.updatedAt)}</span>
+                    <button type="button" className="text-muted underline underline-offset-2" onClick={() => setEditing({ kind: "note", eventId: e.eventId, content: e.note!.content })}>
+                      수정
+                    </button>
+                    <button
+                      type="button"
+                      className="text-coral underline underline-offset-2"
+                      onClick={() => {
+                        if (!window.confirm("교사 보완본을 삭제할까요? 학생 원문은 남습니다.")) return;
+                        run(async () => {
+                          await apiFetch(`/api/admin/notes/${e.note!.noteId}`, { method: "DELETE" });
+                          return "교사 보완본을 삭제했습니다.";
+                        });
+                      }}
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-3 text-[14px]">
+                  <span className="text-muted">없음</span>
+                  <button type="button" className="text-[13px] text-link underline underline-offset-2" onClick={() => setEditing({ kind: "note", eventId: e.eventId, content: "" })}>
+                    교사 보완본 추가
                   </button>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </Card>
         ))}
         {events.length === 0 && (
@@ -258,9 +330,12 @@ export default function AdminStudentPage() {
               <span className="text-[13px] text-muted">
                 {r.finalCharacterCount}자 · {stamp(r.updatedAt)}
               </span>
+              <button type="button" className="ml-auto text-[13px] text-muted underline underline-offset-2" onClick={() => setEditing({ kind: "record", recordId: r.recordId, content: r.editedText || r.generatedText })}>
+                수정
+              </button>
               <button
                 type="button"
-                className="ml-auto text-[13px] text-coral underline underline-offset-2"
+                className="text-[13px] text-coral underline underline-offset-2"
                 onClick={() => {
                   if (!window.confirm("저장된 특기사항을 삭제할까요? 담임 화면에서도 사라집니다.")) return;
                   run(async () => {
@@ -272,7 +347,29 @@ export default function AdminStudentPage() {
                 삭제
               </button>
             </div>
-            <p className="prose-ko mt-3 text-[14px] whitespace-pre-wrap text-body">{r.editedText || r.generatedText}</p>
+            {editing?.kind === "record" && editing.recordId === r.recordId ? (
+              <div className="mt-3">
+                <EditBox
+                  rows={8}
+                  value={editing.content}
+                  onChange={(v) => setEditing({ ...editing, content: v })}
+                  busy={busy}
+                  onCancel={() => setEditing(null)}
+                  onSave={() =>
+                    run(async () => {
+                      await apiFetch(`/api/admin/records/${r.recordId}`, {
+                        method: "PATCH",
+                        body: JSON.stringify({ editedText: editing.content }),
+                      });
+                      setEditing(null);
+                      return "특기사항을 고쳤습니다.";
+                    })
+                  }
+                />
+              </div>
+            ) : (
+              <p className="prose-ko mt-3 text-[14px] whitespace-pre-wrap text-body">{r.editedText || r.generatedText}</p>
+            )}
           </Card>
         ))}
         {data.records.length === 0 && <Card className="py-8 text-center text-muted">저장된 특기사항이 없습니다.</Card>}

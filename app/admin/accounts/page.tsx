@@ -8,6 +8,7 @@ import { Field, Input, Select } from "@/components/ui/field";
 import { Alert, Badge, Card, Spinner } from "@/components/ui/surface";
 import { apiFetch, errorMessage } from "@/lib/client/api";
 import type { AccountSummary, ClassSummary } from "@/lib/admin/lookup";
+import { ROLE_LABEL } from "@/lib/types";
 import { formatClassFull } from "@/lib/utils";
 
 type Filter = "all" | "teacher" | "student" | "problem";
@@ -62,13 +63,11 @@ function AccountsInner() {
     let alive = true;
     (async () => {
       try {
-        const [a, c] = await Promise.all([
-          apiFetch<{ accounts: AccountSummary[] }>("/api/admin/accounts"),
-          apiFetch<{ classes: ClassSummary[] }>("/api/admin/classes"),
-        ]);
+        // 학급 목록은 같은 응답에 실려 온다 (따로 부르면 읽기가 두 배)
+        const a = await apiFetch<{ accounts: AccountSummary[]; classes: ClassSummary[] }>("/api/admin/accounts");
         if (!alive) return;
         setAccounts(a.accounts);
-        setClasses(c.classes);
+        setClasses(a.classes);
         setError(null);
       } catch (err) {
         if (alive) setError(errorMessage(err));
@@ -251,8 +250,8 @@ const AccountRow = memo(function AccountRow({
     <>
       <tr className="border-t border-hairline">
         <td className="px-4 py-3">
-          <Badge tone={a.role === "admin" ? "coral" : a.role === "teacher" ? "info" : "neutral"}>
-            {{ admin: "관리자", teacher: "교사", student: "학생" }[a.role]}
+          <Badge tone={a.role === "admin" ? "coral" : a.role === "scheduler" ? "info" : a.role === "teacher" ? "info" : "neutral"}>
+            {ROLE_LABEL[a.role]}
           </Badge>
         </td>
         <td className="px-4 py-3 text-ink">
@@ -262,41 +261,45 @@ const AccountRow = memo(function AccountRow({
         <td className="px-4 py-3 text-body">{who}</td>
         <td className="px-4 py-3">{a.problem ? <span className="text-coral">{a.problem}</span> : <span className="text-muted">정상</span>}</td>
         <td className="px-4 py-3 text-right">
-          {a.role !== "admin" && (
-            <div className="flex flex-wrap justify-end gap-x-3 gap-y-1 text-[13px]">
+          <div className="flex flex-wrap justify-end gap-x-3 gap-y-1 text-[13px]">
               <button type="button" className="text-muted underline underline-offset-2" onClick={() => onOpen("password")}>
                 비밀번호
               </button>
               <button type="button" className="text-muted underline underline-offset-2" onClick={() => onOpen("email")}>
                 이메일
               </button>
-              <button type="button" className="text-muted underline underline-offset-2" onClick={() => onOpen("assign")}>
-                {a.role === "teacher" ? "학급 배정" : "명단 연결"}
-              </button>
+              {a.role !== "scheduler" && a.role !== "admin" && (
+                <button type="button" className="text-muted underline underline-offset-2" onClick={() => onOpen("assign")}>
+                  {a.role === "teacher" ? "학급 배정" : "명단 연결"}
+                </button>
+              )}
               {a.role === "student" && a.rosterId && (
                 <Link href={`/admin/students/${a.rosterId}`} prefetch={false} className="text-link underline underline-offset-2">
                   기록
                 </Link>
               )}
-              <button
-                type="button"
-                className="text-coral underline underline-offset-2"
-                onClick={() => {
-                  const lines = [`${a.email} 계정을 삭제합니다.`, ""];
-                  if (a.role === "student") lines.push("· 명단 행은 '미가입'으로 돌아가고 소감·기록은 남습니다. 학생은 다시 가입할 수 있습니다.");
-                  else lines.push("· 학급과 학생 자료는 남습니다. 다른 교사를 그 학급에 배정할 수 있습니다.");
-                  lines.push("· 되돌릴 수 없습니다.", "", "계속할까요?");
-                  if (!window.confirm(lines.join("\n"))) return;
-                  run(async () => {
-                    await apiFetch(`/api/admin/accounts/${a.uid}`, { method: "DELETE" });
-                    return `${a.email} 계정을 삭제했습니다.`;
-                  });
-                }}
-              >
-                삭제
-              </button>
-            </div>
-          )}
+              {/* 슈퍼관리자 계정은 지우지 못한다. 본인 비밀번호·이메일만 바꾼다. */}
+              {a.role !== "admin" && (
+                <button
+                  type="button"
+                  className="text-coral underline underline-offset-2"
+                  onClick={() => {
+                    const lines = [`${a.email} 계정을 삭제합니다.`, ""];
+                    if (a.role === "student") lines.push("· 명단 행은 '미가입'으로 돌아가고 소감·기록은 남습니다. 학생은 다시 가입할 수 있습니다.");
+                    else if (a.role === "teacher") lines.push("· 학급과 학생 자료는 남습니다. 다른 교사를 그 학급에 배정할 수 있습니다.");
+                    else lines.push("· 이 계정이 만든 활동은 그대로 남습니다.");
+                    lines.push("· 되돌릴 수 없습니다.", "", "계속할까요?");
+                    if (!window.confirm(lines.join("\n"))) return;
+                    run(async () => {
+                      await apiFetch(`/api/admin/accounts/${a.uid}`, { method: "DELETE" });
+                      return `${a.email} 계정을 삭제했습니다.`;
+                    });
+                  }}
+                >
+                  삭제
+                </button>
+              )}
+          </div>
         </td>
       </tr>
 
@@ -432,7 +435,7 @@ function CreateAccountCard({
   onDone: (message: string) => void;
   onError: (message: string) => void;
 }) {
-  const [role, setRole] = useState<"teacher" | "student">("teacher");
+  const [role, setRole] = useState<"teacher" | "student" | "scheduler">("teacher");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [teacherName, setTeacherName] = useState("");
@@ -483,13 +486,14 @@ function CreateAccountCard({
               id="c-role"
               value={role}
               onChange={(e) => {
-                setRole(e.target.value as "teacher" | "student");
+                setRole(e.target.value as "teacher" | "student" | "scheduler");
                 setRosterOptions(null);
                 setRosterId("");
               }}
             >
               <option value="teacher">교사</option>
               <option value="student">학생</option>
+              <option value="scheduler">일정 관리자 — 활동 등록·양식·참여 현황만</option>
             </Select>
           </Field>
           <Field label="이메일" htmlFor="c-email">
@@ -499,6 +503,7 @@ function CreateAccountCard({
             <Input id="c-pw" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" required />
           </Field>
         </div>
+        {role !== "scheduler" && (
         <div className="grid gap-x-4 sm:grid-cols-3">
           {role === "teacher" && (
             <Field label="교사 이름" htmlFor="c-name">
@@ -529,6 +534,7 @@ function CreateAccountCard({
             </Field>
           )}
         </div>
+        )}
         <Button type="submit" size="sm" loading={saving || busy}>
           만들기
         </Button>

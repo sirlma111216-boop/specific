@@ -1,6 +1,6 @@
 import { adminDb, COL } from "@/lib/firebase/admin";
 import { badRequest, notFound } from "@/lib/api-error";
-import { requireAdmin } from "@/lib/auth/server";
+import { requireStaff } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
 import { resolveForm } from "@/lib/forms/schema";
 import { isValidIsoDate } from "@/lib/utils";
@@ -20,7 +20,7 @@ const STATUSES: EventStatus[] = ["scheduled", "open", "closed"];
  */
 export async function POST(req: Request, { params }: { params: Promise<{ eventId: string }> }) {
   return route(async () => {
-    const ctx = await requireAdmin(req);
+    const ctx = await requireStaff(req);
     const { eventId } = await params;
     const body = await readJson<Body>(req);
 

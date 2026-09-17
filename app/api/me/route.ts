@@ -29,6 +29,7 @@ export async function GET(req: Request) {
       role: ctx.role,
       email: ctx.email,
       needsOnboarding: ctx.role === "teacher" && !ctx.classId,
+      mustChangePassword: ctx.mustChangePassword,
       klass: klass
         ? {
             classId: klass.classId,

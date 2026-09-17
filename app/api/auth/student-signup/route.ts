@@ -1,6 +1,7 @@
 import { adminAuth, adminDb, COL } from "@/lib/firebase/admin";
 import { badRequest } from "@/lib/api-error";
 import { readJson, route } from "@/lib/route-helpers";
+import { invalidateAdminCache } from "@/lib/server-cache";
 import { buildClassMatchKey, normalizeStudentName } from "@/lib/roster/normalize";
 import { SCHOOL_NAME } from "@/lib/school";
 import { formatClassName } from "@/lib/utils";
@@ -143,6 +144,7 @@ export async function POST(req: Request) {
       throw err;
     }
 
+    invalidateAdminCache();
     return { ok: true };
   });
 }

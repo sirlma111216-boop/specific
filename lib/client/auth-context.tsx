@@ -11,6 +11,8 @@ export interface Profile {
   role: Role;
   email: string;
   needsOnboarding: boolean;
+  /** 초기화된 비밀번호로 들어온 학생. 먼저 새 비밀번호를 정해야 한다. */
+  mustChangePassword: boolean;
   klass: {
     classId: string;
     schoolYear: number;

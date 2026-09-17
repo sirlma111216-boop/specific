@@ -4,6 +4,7 @@ import { badRequest, notFound } from "@/lib/api-error";
 import { requireAdmin } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
 import { parseStudentRows } from "@/lib/roster/parse-students";
+import { invalidateAdminCache } from "@/lib/server-cache";
 import type { ClassDoc, RosterDoc } from "@/lib/types";
 
 interface Body {
@@ -65,6 +66,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ classId
     batch.update(classSnap.ref, { studentCount: FieldValue.increment(parsed.students.length) });
     await batch.commit();
 
+    invalidateAdminCache();
     return { added: parsed.students.length, klass: { classId: klass.classId } };
   });
 }

@@ -4,6 +4,7 @@ import { deleteRosterEntry } from "@/lib/admin/cascade";
 import { badRequest, notFound } from "@/lib/api-error";
 import { requireTeacherWithClass } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
+import { invalidateAdminCache } from "@/lib/server-cache";
 import { parseStudentRows } from "@/lib/roster/parse-students";
 import type { RosterDoc } from "@/lib/types";
 
@@ -66,6 +67,7 @@ export async function POST(req: Request) {
     });
     await batch.commit();
 
+    invalidateAdminCache();
     return { added: parsed.students.length };
   });
 }
@@ -92,6 +94,7 @@ export async function DELETE(req: Request) {
 
     const result = await deleteRosterEntry(rosterId);
 
+    invalidateAdminCache();
     return { ok: true, ...result };
   });
 }

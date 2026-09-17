@@ -10,9 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { Alert } from "@/components/ui/surface";
 import { translateFirebaseAuthError } from "./auth-shell";
-import type { Role } from "@/lib/types";
-
-const ROLE_LABEL: Record<Role, string> = { admin: "관리자", teacher: "교사", student: "학생" };
+import { isStaff, ROLE_LABEL, type Role } from "@/lib/types";
 
 export function LoginForm({ role, redirectTo }: { role: Role; redirectTo: string }) {
   const router = useRouter();
@@ -53,7 +51,7 @@ export function LoginForm({ role, redirectTo }: { role: Role; redirectTo: string
       const profile = await apiFetch<Profile>("/api/me");
 
       // 관리자는 교사 로그인 화면으로 들어오지만 관리자 화면으로 보낸다.
-      if (profile.role === "admin") {
+      if (isStaff(profile.role)) {
         await refresh();
         router.replace("/admin");
         return;

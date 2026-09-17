@@ -1,6 +1,6 @@
 import { adminDb, COL } from "@/lib/firebase/admin";
 import { badRequest } from "@/lib/api-error";
-import { requireAdmin } from "@/lib/auth/server";
+import { requireStaff } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
 import { DEFAULT_GUIDANCE } from "@/lib/events/defaults";
 import { computeEventPhase } from "@/lib/events/phase";
@@ -25,7 +25,7 @@ const STATUSES: EventStatus[] = ["scheduled", "open", "closed"];
 /** 관리자용 활동 목록. 활동은 학교 전체 공통이라 학급으로 나누지 않는다. */
 export async function GET(req: Request) {
   return route(async () => {
-    await requireAdmin(req);
+    await requireStaff(req);
     const db = adminDb();
 
     const [eventSnap, classSnap] = await Promise.all([
@@ -59,7 +59,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   return route(async () => {
-    const ctx = await requireAdmin(req);
+    const ctx = await requireStaff(req);
     const body = await readJson<CreateBody>(req);
 
     const category = body.category as Category;

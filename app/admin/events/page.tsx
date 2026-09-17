@@ -7,6 +7,7 @@ import { Field, Input, Select } from "@/components/ui/field";
 import { Alert, Badge, Card, Spinner } from "@/components/ui/surface";
 import { EventBasicsForm, type EventBasics } from "@/components/admin/event-basics-form";
 import { apiFetch, errorMessage } from "@/lib/client/api";
+import { useAuth } from "@/lib/client/auth-context";
 import { DEFAULT_GUIDANCE } from "@/lib/events/defaults";
 import { PHASE_LABEL } from "@/lib/events/phase";
 import {
@@ -32,6 +33,7 @@ interface EventsResponse {
 }
 
 type Filter = "all" | Category | "test";
+type PanelKind = "edit" | "copy" | "participation";
 
 const EMPTY: EventBasics = {
   category: "autonomous",
@@ -58,9 +60,12 @@ export default function AdminEventsPage() {
   const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   /** 카드 안에서 열려 있는 편집/복사 패널. 한 번에 하나만 연다. */
-  const [panel, setPanel] = useState<{ eventId: string; kind: "edit" | "copy" } | null>(null);
+  const [panel, setPanel] = useState<{ eventId: string; kind: PanelKind } | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const reload = () => setReloadToken((n) => n + 1);
+  const { profile } = useAuth();
+  // 삭제는 슈퍼관리자만. 일정 관리자에게는 버튼 자체를 보이지 않는다. (서버도 막는다)
+  const canDelete = profile?.role === "admin";
 
   useEffect(() => {
     let alive = true;
@@ -225,7 +230,7 @@ export default function AdminEventsPage() {
                 setNotice(`'${title}' 활동을 복사했습니다. 새 카드에서 날짜와 공개 여부를 확인하세요.`);
                 reload();
               }}
-              onRemove={() => remove(event)}
+              onRemove={canDelete ? () => remove(event) : null}
               onError={setError}
             />
           ))}
@@ -250,11 +255,12 @@ function EventCard({
 }: {
   event: EventItem;
   studentCount: number;
-  panel: "edit" | "copy" | null;
-  onOpenPanel: (kind: "edit" | "copy") => void;
+  panel: PanelKind | null;
+  onOpenPanel: (kind: PanelKind) => void;
   onPatch: (body: Record<string, unknown>, done?: string) => Promise<void>;
   onCopied: (title: string) => void;
-  onRemove: () => void;
+  /** null 이면 삭제 권한이 없다 */
+  onRemove: (() => void) | null;
   onError: (message: string) => void;
 }) {
   return (
@@ -292,6 +298,9 @@ function EventCard({
         <Button size="sm" variant="secondary" onClick={() => onOpenPanel("copy")}>
           {panel === "copy" ? "복사 닫기" : "이 활동 복사"}
         </Button>
+        <Button size="sm" variant="secondary" onClick={() => onOpenPanel("participation")}>
+          {panel === "participation" ? "현황 닫기" : "참여 현황"}
+        </Button>
         {event.phase === "scheduled" && (
           <Button size="sm" variant="secondary" onClick={() => onPatch({ status: "open" })}>
             지금 공개
@@ -307,16 +316,70 @@ function EventCard({
             다시 열기
           </Button>
         )}
-        <Button size="sm" variant="danger" onClick={onRemove}>
-          삭제
-        </Button>
+        {onRemove && (
+          <Button size="sm" variant="danger" onClick={onRemove}>
+            삭제
+          </Button>
+        )}
       </div>
 
       {panel === "edit" && (
         <EditPanel event={event} onSave={(body) => onPatch(body, "활동 정보를 저장했습니다.")} />
       )}
       {panel === "copy" && <CopyPanel event={event} onCopied={onCopied} onError={onError} />}
+      {panel === "participation" && <ParticipationPanel eventId={event.eventId} />}
     </Card>
+  );
+}
+
+interface Participation {
+  total: { students: number; submitted: number };
+  classes: Array<{ classId: string; label: string; studentCount: number; submitted: number }>;
+}
+
+/** 학급별 작성 인원. 개별 학생은 보이지 않는다 — 일정 관리자도 보는 화면이다. */
+function ParticipationPanel({ eventId }: { eventId: string }) {
+  const [data, setData] = useState<Participation | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    apiFetch<Participation>(`/api/admin/events/${eventId}/participation`)
+      .then((res) => alive && setData(res))
+      .catch((err) => alive && setError(errorMessage(err)));
+    return () => {
+      alive = false;
+    };
+  }, [eventId]);
+
+  if (error) return <p className="mt-5 text-[13px] text-coral">{error}</p>;
+  if (!data) return <p className="mt-5 text-[13px] text-muted">불러오는 중…</p>;
+
+  const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : 0);
+
+  return (
+    <div className="mt-5 border-t border-hairline pt-5">
+      <div className="mb-3 flex flex-wrap items-baseline gap-3">
+        <h4 className="text-[15px] font-medium text-ink">참여 현황</h4>
+        <span className="text-[13px] text-muted">
+          전체 {data.total.submitted} / {data.total.students}명 작성 ({pct(data.total.submitted, data.total.students)}%)
+        </span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {data.classes.map((c) => (
+          <div key={c.classId} className="flex items-center gap-3 rounded-sm border border-hairline px-3 py-2 text-[13px]">
+            <span className="min-w-0 flex-1 truncate text-body">{c.label}</span>
+            <span className="whitespace-nowrap text-ink">
+              {c.submitted} / {c.studentCount}
+            </span>
+            <span className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-strong" aria-hidden>
+              <span className="block h-full bg-ink" style={{ width: `${pct(c.submitted, c.studentCount)}%` }} />
+            </span>
+          </div>
+        ))}
+        {data.classes.length === 0 && <p className="text-[13px] text-muted">해당하는 학급이 없습니다.</p>}
+      </div>
+    </div>
   );
 }
 

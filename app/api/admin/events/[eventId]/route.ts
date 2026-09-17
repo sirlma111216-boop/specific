@@ -1,7 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb, COL } from "@/lib/firebase/admin";
 import { badRequest, notFound } from "@/lib/api-error";
-import { requireAdmin } from "@/lib/auth/server";
+import { requireAdmin, requireStaff } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
 import { resolveForm } from "@/lib/forms/schema";
 import { sanitizeForm } from "@/lib/forms/sanitize-server";
@@ -40,7 +40,7 @@ async function loadEvent(eventId: string) {
  */
 export async function PATCH(req: Request, { params }: { params: Promise<{ eventId: string }> }) {
   return route(async () => {
-    await requireAdmin(req);
+    await requireStaff(req);
     const { eventId } = await params;
     const { ref, event } = await loadEvent(eventId);
     const body = await readJson<PatchBody>(req);

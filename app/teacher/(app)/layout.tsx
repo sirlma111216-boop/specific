@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/client/auth-context";
+import { isStaff } from "@/lib/types";
 import { LabbitoryLink } from "@/components/ui/labbitory-link";
 import { SetupNotice } from "@/components/ui/setup-notice";
 import { Spinner } from "@/components/ui/surface";
@@ -26,7 +27,7 @@ export default function TeacherAppLayout({ children }: { children: React.ReactNo
       router.replace("/teacher/login");
       return;
     }
-    if (profile.role === "admin") {
+    if (isStaff(profile.role)) {
       router.replace("/admin");
       return;
     }

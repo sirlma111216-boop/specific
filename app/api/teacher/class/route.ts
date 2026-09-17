@@ -2,6 +2,7 @@ import { adminDb, COL } from "@/lib/firebase/admin";
 import { badRequest, notFound } from "@/lib/api-error";
 import { requireTeacher } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
+import { invalidateAdminCache } from "@/lib/server-cache";
 import { buildClassMatchKey } from "@/lib/roster/normalize";
 import { parseStudentRows } from "@/lib/roster/parse-students";
 import { SCHOOL_NAME } from "@/lib/school";
@@ -110,6 +111,7 @@ export async function POST(req: Request) {
     });
     await batch.commit();
 
+    invalidateAdminCache();
     return { classId: classRef.id, studentCount: parsed.students.length };
   });
 }

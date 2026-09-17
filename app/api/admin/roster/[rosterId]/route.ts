@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
 import { deleteRosterEntry } from "@/lib/admin/cascade";
 import { normalizeStudentName } from "@/lib/roster/normalize";
+import { invalidateAdminCache } from "@/lib/server-cache";
 import type { RosterDoc } from "@/lib/types";
 
 interface PatchBody {
@@ -47,6 +48,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ roster
     }
 
     await ref.update(next);
+    invalidateAdminCache();
     return { roster: { ...roster, ...next } };
   });
 }
@@ -58,6 +60,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ roste
     const snap = await adminDb().collection(COL.roster).doc(rosterId).get();
     if (!snap.exists) throw notFound("학생을 찾을 수 없습니다.");
     const result = await deleteRosterEntry(rosterId);
+    invalidateAdminCache();
     return { ok: true, ...result };
   });
 }

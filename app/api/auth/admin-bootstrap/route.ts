@@ -9,10 +9,11 @@ interface Body {
 }
 
 /**
- * 관리자 계정 준비.
+ * 슈퍼관리자 계정 복구.
  *
- * 관리자는 회원가입하지 않는다. ADMIN_EMAIL / ADMIN_PASSWORD 로 지정되어 있고,
- * 처음 로그인할 때 이 라우트가 계정을 만들어 준다. 이후에는 이미 있으므로 그대로 통과한다.
+ * 슈퍼관리자가 **하나도 없을 때만** ADMIN_EMAIL / ADMIN_PASSWORD 로 계정을 만든다.
+ * 슈퍼관리자가 이미 있으면 환경변수 값이 맞아도 아무것도 하지 않는다 — 계정을 화면에서
+ * 만들고 바꾸는 지금 구조에서, 환경변수에 적힌 옛 계정이 되살아나는 뒷문이 되면 안 된다.
  *
  * 로그인 화면은 로그인이 실패했을 때만 이 라우트를 부르므로,
  * 일반 교사·학생 로그인 흐름에는 영향이 없다.
@@ -32,6 +33,14 @@ export async function POST(req: Request) {
     if (email !== adminEmail || password !== adminPassword) {
       throw badRequest("로그인에 실패했습니다.");
     }
+
+    // 이미 슈퍼관리자가 있으면 복구 경로를 닫는다.
+    const existingAdmins = await adminDb()
+      .collection(COL.users)
+      .where("role", "==", "admin")
+      .limit(1)
+      .get();
+    if (!existingAdmins.empty) throw badRequest("로그인에 실패했습니다.");
 
     const auth = adminAuth();
     let uid: string;

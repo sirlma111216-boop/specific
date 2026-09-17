@@ -1,6 +1,7 @@
 import { adminAuth, adminDb, COL } from "@/lib/firebase/admin";
 import { badRequest, forbidden, notFound } from "@/lib/api-error";
-import { requireAdmin } from "@/lib/auth/server";
+import { forgetUser, requireAdmin } from "@/lib/auth/server";
+import { invalidateAdminCache } from "@/lib/server-cache";
 import { readJson, route } from "@/lib/route-helpers";
 import { deleteAccount } from "@/lib/admin/cascade";
 import type { ClassDoc, RosterDoc, UserDoc } from "@/lib/types";
@@ -29,10 +30,13 @@ async function loadUser(uid: string) {
  */
 export async function PATCH(req: Request, { params }: { params: Promise<{ uid: string }> }) {
   return route(async () => {
-    await requireAdmin(req);
+    const ctx = await requireAdmin(req);
     const { uid } = await params;
     const { ref, user } = await loadUser(uid);
-    if (user.role === "admin") throw forbidden("관리자 계정은 여기서 수정할 수 없습니다.");
+    // 슈퍼관리자 계정은 본인만 고칠 수 있다 (비밀번호·이메일). 다른 슈퍼관리자 것은 손대지 못한다.
+    if (user.role === "admin" && uid !== ctx.uid) {
+      throw forbidden("다른 슈퍼관리자 계정은 수정할 수 없습니다.");
+    }
     const body = await readJson<PatchBody>(req);
     const db = adminDb();
 
@@ -113,6 +117,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ uid: s
       }
     }
     if (Object.keys(docUpdate).length > 0) await ref.update(docUpdate);
+    forgetUser(uid);
+    invalidateAdminCache();
 
     return { ok: true, notes };
   });
@@ -126,6 +132,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ uid: 
     const { user } = await loadUser(uid);
     if (user.role === "admin") throw forbidden("관리자 계정은 지울 수 없습니다.");
     const result = await deleteAccount(uid);
+    forgetUser(uid);
+    invalidateAdminCache();
     return { ok: true, ...result };
   });
 }

@@ -7,14 +7,17 @@ import { useAuth } from "@/lib/client/auth-context";
 import { LabbitoryLink } from "@/components/ui/labbitory-link";
 import { SetupNotice } from "@/components/ui/setup-notice";
 import { Spinner } from "@/components/ui/surface";
+import { isStaff, ROLE_LABEL } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const NAV = [
+/** 슈퍼관리자는 전부, 일정 관리자는 활동만. (서버도 같은 기준으로 막는다) */
+const NAV_ADMIN = [
   { href: "/admin", label: "대시보드", exact: true },
-  { href: "/admin/events", label: "활동" },
-  { href: "/admin/classes", label: "학급" },
-  { href: "/admin/accounts", label: "계정" },
+  { href: "/admin/events", label: "활동", exact: false },
+  { href: "/admin/classes", label: "학급", exact: false },
+  { href: "/admin/accounts", label: "계정", exact: false },
 ];
+const NAV_SCHEDULER = [{ href: "/admin/events", label: "활동", exact: false }];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { configured, loading, profile, signOut } = useAuth();
@@ -27,14 +30,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       router.replace("/teacher/login");
       return;
     }
-    // 관리자 화면은 지정된 관리자 계정만 들어온다.
-    if (profile.role !== "admin") {
+    // 관리자 화면은 슈퍼관리자·일정 관리자만 들어온다.
+    if (!isStaff(profile.role)) {
       router.replace(profile.role === "teacher" ? "/teacher" : "/student");
+      return;
     }
-  }, [loading, profile, router]);
+    // 일정 관리자는 활동 화면만 쓴다. 다른 관리자 경로로 오면 활동으로 보낸다.
+    if (profile.role === "scheduler" && !pathname.startsWith("/admin/events")) {
+      router.replace("/admin/events");
+    }
+  }, [loading, profile, pathname, router]);
 
   if (!configured) return <SetupNotice />;
-  if (loading || !profile || profile.role !== "admin") return <Spinner />;
+  if (loading || !profile || !isStaff(profile.role)) return <Spinner />;
+  if (profile.role === "scheduler" && !pathname.startsWith("/admin/events")) return <Spinner />;
+
+  const NAV = profile.role === "admin" ? NAV_ADMIN : NAV_SCHEDULER;
 
   return (
     <div className="flex-1">
@@ -47,7 +58,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </Link>
           </div>
           <span className="rounded-sm bg-coral px-2 py-0.5 text-[12px] font-medium text-white">
-            관리자
+            {ROLE_LABEL[profile.role]}
           </span>
 
           <nav className="hidden gap-5 sm:flex">

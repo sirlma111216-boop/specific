@@ -2,6 +2,10 @@ import "server-only";
 
 import { adminDb, COL } from "@/lib/firebase/admin";
 import { normalizeGradeOrClass } from "@/lib/roster/normalize";
+import { cached } from "@/lib/server-cache";
+
+/** 관리자 화면 캐시 수명. 관리자가 무언가를 바꾸면 그 자리에서 지워지므로 길어도 된다. */
+const ADMIN_TTL_MS = 5 * 60 * 1000;
 import type { ClassDoc, RosterDoc, UserDoc } from "@/lib/types";
 
 /**
@@ -27,25 +31,31 @@ export function sortClassSummaries<T extends { isTest: boolean; schoolYear: numb
 
 /** 관리자 화면이 같이 쓰는 조회 도우미. 한 번 읽어 Map으로 들고 다닌다. */
 
-export async function loadAllUsers(): Promise<Map<string, UserDoc>> {
-  const snap = await adminDb().collection(COL.users).get();
-  const map = new Map<string, UserDoc>();
-  snap.forEach((d) => map.set(d.id, d.data() as UserDoc));
-  return map;
+export function loadAllUsers(): Promise<Map<string, UserDoc>> {
+  return cached("admin:users", ADMIN_TTL_MS, async () => {
+    const snap = await adminDb().collection(COL.users).get();
+    const map = new Map<string, UserDoc>();
+    snap.forEach((d) => map.set(d.id, d.data() as UserDoc));
+    return map;
+  });
 }
 
-export async function loadAllClasses(): Promise<Map<string, ClassDoc>> {
-  const snap = await adminDb().collection(COL.classes).get();
-  const map = new Map<string, ClassDoc>();
-  snap.forEach((d) => map.set(d.id, d.data() as ClassDoc));
-  return map;
+export function loadAllClasses(): Promise<Map<string, ClassDoc>> {
+  return cached("admin:classes", ADMIN_TTL_MS, async () => {
+    const snap = await adminDb().collection(COL.classes).get();
+    const map = new Map<string, ClassDoc>();
+    snap.forEach((d) => map.set(d.id, d.data() as ClassDoc));
+    return map;
+  });
 }
 
-export async function loadAllRoster(): Promise<Map<string, RosterDoc>> {
-  const snap = await adminDb().collection(COL.roster).get();
-  const map = new Map<string, RosterDoc>();
-  snap.forEach((d) => map.set(d.id, d.data() as RosterDoc));
-  return map;
+export function loadAllRoster(): Promise<Map<string, RosterDoc>> {
+  return cached("admin:roster", ADMIN_TTL_MS, async () => {
+    const snap = await adminDb().collection(COL.roster).get();
+    const map = new Map<string, RosterDoc>();
+    snap.forEach((d) => map.set(d.id, d.data() as RosterDoc));
+    return map;
+  });
 }
 
 /** 화면에 보여줄 학급 한 줄 요약 */
@@ -123,7 +133,8 @@ export function summarizeAccount(
     problem: null,
   };
 
-  if (user.role === "admin") return base;
+  // 슈퍼관리자·일정 관리자는 학급·명단과 무관하다.
+  if (user.role === "admin" || user.role === "scheduler") return base;
 
   if (user.role === "teacher") {
     base.teacherName = user.teacherName;

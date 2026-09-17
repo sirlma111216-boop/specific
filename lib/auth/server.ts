@@ -2,7 +2,16 @@ import "server-only";
 
 import { adminAuth, adminDb, COL } from "@/lib/firebase/admin";
 import { forbidden, unauthorized } from "@/lib/api-error";
-import type { Role, UserDoc } from "@/lib/types";
+import { cached, invalidate } from "@/lib/server-cache";
+
+/** 계정 문서 캐시 수명. 역할·소속은 거의 바뀌지 않는다. 바뀌는 곳에서는 forgetUser 를 부른다. */
+const USER_TTL_MS = 60 * 1000;
+
+/** 계정 문서를 바꾼 뒤 부른다 (역할·학급·명단·비밀번호 초기화 표시). */
+export function forgetUser(uid: string): void {
+  invalidate(`user:${uid}`);
+}
+import { isStaff, type Role, type UserDoc } from "@/lib/types";
 
 export interface AuthContext {
   uid: string;
@@ -12,6 +21,8 @@ export interface AuthContext {
   rosterId: string | null;
   /** 연수용 테스트 계정인가. 활동 노출 범위를 가르는 기준이다. */
   isTest: boolean;
+  /** 담임이 비밀번호를 초기화한 학생. 새 비밀번호를 정하기 전까지 다른 API를 막는다. */
+  mustChangePassword: boolean;
 }
 
 /**
@@ -34,9 +45,17 @@ export async function getAuthContext(req: Request): Promise<AuthContext> {
     throw unauthorized("로그인 정보가 만료되었습니다. 다시 로그인해주세요.");
   }
 
-  const snap = await adminDb().collection(COL.users).doc(uid).get();
-  if (!snap.exists) throw unauthorized("등록되지 않은 계정입니다.");
-  const user = snap.data() as UserDoc;
+  // 호출마다 1건씩 읽던 것을 잠깐 캐시한다. 비밀번호 초기화 표시가 켜진 계정은 캐시하지 않아
+  // 새 비밀번호를 정하는 즉시 풀린다.
+  const user = await cached<UserDoc | null>(`user:${uid}`, USER_TTL_MS, async () => {
+    const snap = await adminDb().collection(COL.users).doc(uid).get();
+    return snap.exists ? (snap.data() as UserDoc) : null;
+  });
+  if (!user) {
+    invalidate(`user:${uid}`);
+    throw unauthorized("등록되지 않은 계정입니다.");
+  }
+  if (user.mustChangePassword) invalidate(`user:${uid}`);
 
   return {
     uid,
@@ -45,6 +64,7 @@ export async function getAuthContext(req: Request): Promise<AuthContext> {
     classId: user.classId ?? null,
     rosterId: user.rosterId ?? null,
     isTest: Boolean(user.isTest),
+    mustChangePassword: Boolean(user.mustChangePassword),
   };
 }
 
@@ -55,16 +75,21 @@ export async function requireTeacher(req: Request): Promise<AuthContext> {
 }
 
 /**
- * 관리자 전용.
- * 관리자는 지정된 계정 하나뿐이므로, users 문서의 역할과 ADMIN_EMAIL을 함께 확인한다.
- * (환경변수가 바뀌면 예전 관리자 계정은 더 이상 통과하지 못한다)
+ * 슈퍼관리자 전용.
+ * 역할은 users 문서를 신뢰원으로 삼는다. 이 문서는 서버(Admin SDK)만 쓸 수 있고
+ * 브라우저 쓰기는 보안 규칙에서 전부 막혀 있으므로, 역할이 admin 이면 그 자체로 충분하다.
+ * (예전에는 ADMIN_EMAIL 과도 대조했다. 슈퍼관리자 계정을 화면에서 바꿀 수 있게 하면서 뺐다)
  */
 export async function requireAdmin(req: Request): Promise<AuthContext> {
   const ctx = await getAuthContext(req);
-  const adminEmail = (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase();
-  if (ctx.role !== "admin" || !adminEmail || ctx.email.toLowerCase() !== adminEmail) {
-    throw forbidden("관리자만 사용할 수 있습니다.");
-  }
+  if (ctx.role !== "admin") throw forbidden("슈퍼관리자만 사용할 수 있습니다.");
+  return ctx;
+}
+
+/** 활동(일정·양식) 관리: 슈퍼관리자와 일정 관리자. */
+export async function requireStaff(req: Request): Promise<AuthContext> {
+  const ctx = await getAuthContext(req);
+  if (!isStaff(ctx.role)) throw forbidden("관리자만 사용할 수 있습니다.");
   return ctx;
 }
 
@@ -79,11 +104,16 @@ export async function requireTeacherWithClass(
 
 export async function requireStudent(
   req: Request,
+  options: { allowPendingPassword?: boolean } = {},
 ): Promise<AuthContext & { classId: string; rosterId: string }> {
   const ctx = await getAuthContext(req);
   if (ctx.role !== "student") throw forbidden("학생 계정만 사용할 수 있습니다.");
   if (!ctx.classId || !ctx.rosterId) {
     throw forbidden("학급 명단과 연결되지 않은 계정입니다.");
+  }
+  // 초기화된 비밀번호로 들어온 학생은 새 비밀번호를 정하기 전까지 다른 일을 하지 못한다.
+  if (ctx.mustChangePassword && !options.allowPendingPassword) {
+    throw forbidden("먼저 새 비밀번호를 정해주세요.", "password_change_required");
   }
   return { ...ctx, classId: ctx.classId, rosterId: ctx.rosterId };
 }

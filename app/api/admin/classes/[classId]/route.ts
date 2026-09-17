@@ -3,6 +3,7 @@ import { badRequest, notFound } from "@/lib/api-error";
 import { requireAdmin } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
 import { deleteClass } from "@/lib/admin/cascade";
+import { invalidateAdminCache } from "@/lib/server-cache";
 import { buildClassMatchKey } from "@/lib/roster/normalize";
 import { SCHOOL_NAME } from "@/lib/school";
 import type { ClassDoc, RosterDoc, UserDoc } from "@/lib/types";
@@ -138,6 +139,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ classI
       await batch.commit();
     }
 
+    invalidateAdminCache();
     return { klass: { ...klass, ...next } };
   });
 }
@@ -148,6 +150,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ class
     const { classId } = await params;
     await loadClass(classId);
     const result = await deleteClass(classId);
+    invalidateAdminCache();
     return { ok: true, ...result };
   });
 }

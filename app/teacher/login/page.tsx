@@ -8,6 +8,7 @@ import { LoginForm } from "@/components/auth/login-form";
 import { SetupNotice } from "@/components/ui/setup-notice";
 import { Spinner } from "@/components/ui/surface";
 import { useAuth } from "@/lib/client/auth-context";
+import { isStaff } from "@/lib/types";
 
 export default function TeacherLoginPage() {
   const { configured, loading, profile } = useAuth();
@@ -15,7 +16,7 @@ export default function TeacherLoginPage() {
 
   useEffect(() => {
     if (loading || !profile) return;
-    if (profile.role === "admin") router.replace("/admin");
+    if (isStaff(profile.role)) router.replace("/admin");
     else if (profile.role === "teacher") router.replace("/teacher");
   }, [loading, profile, router]);
 

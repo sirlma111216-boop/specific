@@ -17,8 +17,8 @@ export function badRequest(message: string, code = "bad_request") {
 export function unauthorized(message = "로그인이 필요합니다.") {
   return new ApiError(401, message, "unauthorized");
 }
-export function forbidden(message = "접근 권한이 없습니다.") {
-  return new ApiError(403, message, "forbidden");
+export function forbidden(message = "접근 권한이 없습니다.", code = "forbidden") {
+  return new ApiError(403, message, code);
 }
 export function notFound(message = "대상을 찾을 수 없습니다.") {
   return new ApiError(404, message, "not_found");

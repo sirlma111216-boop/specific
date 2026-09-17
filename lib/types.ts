@@ -3,7 +3,26 @@ import type { FormAnswers, FormQuestion } from "@/lib/forms/schema";
 
 /** 앱 전체에서 공유하는 도메인 타입. Firestore 문서 모양과 1:1로 맞춘다. */
 
-export type Role = "admin" | "teacher" | "student";
+/**
+ * 역할.
+ *  · admin     — 슈퍼관리자. 계정·학급·활동·모든 기록을 보고 고치고 지운다.
+ *  · scheduler — 일정 관리자. 활동(일정·양식)의 생성·변경과 참여 인원 확인만 한다.
+ *                활동 삭제, 학생 개별 기록 열람, 계정·학급 관리는 하지 못한다.
+ *  · teacher / student
+ */
+export type Role = "admin" | "scheduler" | "teacher" | "student";
+
+export const ROLE_LABEL: Record<Role, string> = {
+  admin: "슈퍼관리자",
+  scheduler: "일정 관리자",
+  teacher: "교사",
+  student: "학생",
+};
+
+/** 활동을 관리하는 역할(슈퍼관리자·일정 관리자) */
+export function isStaff(role: Role): boolean {
+  return role === "admin" || role === "scheduler";
+}
 
 /** 창의적 체험활동 영역. MVP는 자율·자치활동 / 진로활동 두 가지만 다룬다. */
 export type Category = "autonomous" | "career";
@@ -42,6 +61,10 @@ export interface UserDoc {
    * 테스트 계정은 테스트 활동만 보고, 실제 계정은 테스트 활동을 보지 못한다.
    */
   isTest?: boolean;
+  /**
+   * 담임이 비밀번호를 초기화한 학생. 다음 로그인 때 새 비밀번호를 정해야 다른 화면으로 갈 수 있다.
+   */
+  mustChangePassword?: boolean;
 }
 
 export interface ClassDoc {

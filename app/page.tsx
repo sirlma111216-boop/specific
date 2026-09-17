@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/client/auth-context";
+import { isStaff } from "@/lib/types";
 import { LabbitoryLink } from "@/components/ui/labbitory-link";
 import { SetupNotice } from "@/components/ui/setup-notice";
 import { Spinner } from "@/components/ui/surface";
@@ -14,7 +15,7 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (loading || !profile) return;
-    if (profile.role === "admin") router.replace("/admin");
+    if (isStaff(profile.role)) router.replace("/admin");
     else router.replace(profile.role === "teacher" ? "/teacher" : "/student");
   }, [loading, profile, router]);
 

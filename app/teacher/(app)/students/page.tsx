@@ -7,6 +7,7 @@ import { Alert, Badge, Card, Spinner } from "@/components/ui/surface";
 import { emptyRows, RosterEditor, type RosterRow } from "@/components/roster/roster-editor";
 import { apiFetch, errorMessage } from "@/lib/client/api";
 import type { StudentListItem } from "@/lib/types";
+import { STUDENT_RESET_PASSWORD } from "@/lib/school";
 
 interface StudentsResponse {
   students: StudentListItem[];
@@ -58,6 +59,33 @@ export default function TeacherStudentsPage() {
       setError(errorMessage(err));
     } finally {
       setBusy(false);
+    }
+  }
+
+  /**
+   * 비밀번호를 잊은 학생. 정해진 비밀번호로 되돌리고, 학생은 다음 로그인 때 새로 정한다.
+   * 슈퍼관리자에게 일일이 부탁하지 않도록 담임이 직접 한다.
+   */
+  async function resetPassword(item: StudentListItem) {
+    const who = `${item.studentNumber}번 ${item.studentName}`;
+    const ok = window.confirm(
+      `${who} 학생의 비밀번호를 초기화합니다.\n\n` +
+        `· 비밀번호가 ${STUDENT_RESET_PASSWORD} 로 바뀝니다.\n` +
+        `· 학생은 이 비밀번호로 로그인하자마자 새 비밀번호를 정해야 합니다.\n\n계속할까요?`,
+    );
+    if (!ok) return;
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await apiFetch<{ password: string }>(
+        `/api/teacher/students/${item.rosterId}/reset-password`,
+        { method: "POST" },
+      );
+      setNotice(
+        `${who} 학생의 비밀번호를 ${res.password} 로 초기화했습니다. 학생에게 알려주세요. 학생은 로그인 직후 새 비밀번호를 정하게 됩니다.`,
+      );
+    } catch (err) {
+      setError(errorMessage(err));
     }
   }
 
@@ -137,7 +165,7 @@ export default function TeacherStudentsPage() {
                 <th className="w-28 px-4 py-3 text-left font-medium">가입</th>
                 <th className="w-24 px-4 py-3 text-left font-medium">자율 기록</th>
                 <th className="w-24 px-4 py-3 text-left font-medium">진로 기록</th>
-                <th className="w-20 px-4 py-3" />
+                <th className="w-44 px-4 py-3" />
               </tr>
             </thead>
             <tbody>
@@ -164,13 +192,16 @@ export default function TeacherStudentsPage() {
                   <td className="px-4 py-3 text-body">{s.autonomousCount}</td>
                   <td className="px-4 py-3 text-body">{s.careerCount}</td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => removeStudent(s)}
-                      className="text-[13px] text-muted"
-                    >
-                      삭제
-                    </button>
+                    <div className="flex justify-end gap-3 text-[13px]">
+                      {s.signupStatus === "linked" && (
+                        <button type="button" onClick={() => resetPassword(s)} className="text-muted">
+                          비밀번호 초기화
+                        </button>
+                      )}
+                      <button type="button" onClick={() => removeStudent(s)} className="text-muted">
+                        삭제
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

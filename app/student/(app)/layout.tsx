@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/client/auth-context";
 import { LabbitoryLink } from "@/components/ui/labbitory-link";
@@ -11,6 +11,8 @@ import { Spinner } from "@/components/ui/surface";
 export default function StudentAppLayout({ children }: { children: React.ReactNode }) {
   const { configured, loading, profile, signOut } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const changing = pathname === "/student/change-password";
 
   useEffect(() => {
     if (loading) return;
@@ -18,11 +20,17 @@ export default function StudentAppLayout({ children }: { children: React.ReactNo
       router.replace("/student/login");
       return;
     }
-    if (profile.role !== "student") router.replace("/teacher");
-  }, [loading, profile, router]);
+    if (profile.role !== "student") {
+      router.replace("/teacher");
+      return;
+    }
+    // 담임이 초기화한 비밀번호로 들어온 학생은 새 비밀번호를 정하기 전까지 다른 화면으로 못 간다.
+    if (profile.mustChangePassword && !changing) router.replace("/student/change-password");
+  }, [loading, profile, changing, router]);
 
   if (!configured) return <SetupNotice />;
   if (loading || !profile || profile.role !== "student") return <Spinner />;
+  if (profile.mustChangePassword && !changing) return <Spinner />;
 
   return (
     <div className="flex-1">
