@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { memo, Suspense, useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { Alert, Badge, Card, Spinner } from "@/components/ui/surface";
@@ -44,10 +44,19 @@ function AccountsInner() {
   const [busy, setBusy] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const reload = () => setReloadToken((n) => n + 1);
-
-  // 열려 있는 행 작업 패널
-  const [panel, setPanel] = useState<{ uid: string; kind: "password" | "email" | "assign" } | null>(null);
   const [creating, setCreating] = useState(false);
+
+  // 행 하나가 작업을 마치면 알림을 띄우고 목록을 다시 읽는다.
+  // 이 콜백은 바뀌지 않아야 memo 된 행들이 매번 다시 그려지지 않는다.
+  const onRowDone = useCallback((message: string) => {
+    setError(null);
+    setNotice(message);
+    setReloadToken((n) => n + 1);
+  }, []);
+  const onRowError = useCallback((message: string) => {
+    setNotice(null);
+    setError(message);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -77,7 +86,6 @@ function AccountsInner() {
     try {
       const msg = await fn();
       if (msg) setNotice(msg);
-      setPanel(null);
       reload();
     } catch (err) {
       setError(errorMessage(err));
@@ -167,15 +175,7 @@ function AccountsInner() {
             </thead>
             <tbody>
               {rows.map((a) => (
-                <AccountRow
-                  key={a.uid}
-                  a={a}
-                  classes={classes}
-                  panel={panel?.uid === a.uid ? panel.kind : null}
-                  onOpen={(kind) => setPanel((p) => (p?.uid === a.uid && p.kind === kind ? null : { uid: a.uid, kind }))}
-                  busy={busy}
-                  run={run}
-                />
+                <AccountRow key={a.uid} a={a} classes={classes} onDone={onRowDone} onError={onRowError} />
               ))}
               {rows.length === 0 && (
                 <tr>
@@ -193,24 +193,44 @@ function AccountsInner() {
   );
 }
 
-function AccountRow({
+type PanelKind = "password" | "email" | "assign";
+
+/**
+ * 계정 한 줄. 패널 열림·진행 중 상태를 행 안에 두고 memo 로 감싸서,
+ * 한 줄을 열고 닫아도 나머지 350여 줄은 다시 그리지 않는다.
+ * (부모에 상태를 두었을 때는 토글 한 번에 표 전체가 다시 그려졌다)
+ */
+const AccountRow = memo(function AccountRow({
   a,
   classes,
-  panel,
-  onOpen,
-  busy,
-  run,
+  onDone,
+  onError,
 }: {
   a: AccountSummary;
   classes: ClassSummary[];
-  panel: "password" | "email" | "assign" | null;
-  onOpen: (kind: "password" | "email" | "assign") => void;
-  busy: boolean;
-  run: (fn: () => Promise<string | void>) => Promise<void>;
+  onDone: (message: string) => void;
+  onError: (message: string) => void;
 }) {
+  const [panel, setPanel] = useState<PanelKind | null>(null);
+  const [busy, setBusy] = useState(false);
   const [value, setValue] = useState("");
   const [rosterOptions, setRosterOptions] = useState<PendingRow[] | null>(null);
   const [classPick, setClassPick] = useState("");
+
+  const onOpen = (kind: PanelKind) => setPanel((p) => (p === kind ? null : kind));
+
+  async function run(fn: () => Promise<string | void>) {
+    setBusy(true);
+    try {
+      const msg = await fn();
+      setPanel(null);
+      onDone(msg ?? "처리했습니다.");
+    } catch (err) {
+      onError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const who =
     a.role === "teacher"
@@ -254,7 +274,7 @@ function AccountRow({
                 {a.role === "teacher" ? "학급 배정" : "명단 연결"}
               </button>
               {a.role === "student" && a.rosterId && (
-                <Link href={`/admin/students/${a.rosterId}`} className="text-link underline underline-offset-2">
+                <Link href={`/admin/students/${a.rosterId}`} prefetch={false} className="text-link underline underline-offset-2">
                   기록
                 </Link>
               )}
@@ -399,7 +419,7 @@ function AccountRow({
       )}
     </>
   );
-}
+});
 
 function CreateAccountCard({
   classes,

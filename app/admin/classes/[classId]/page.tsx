@@ -318,7 +318,7 @@ export default function AdminClassDetailPage() {
                   <>
                     <td className="px-4 py-3 text-muted">{r.studentNumber}</td>
                     <td className="px-4 py-3">
-                      <Link href={`/admin/students/${r.rosterId}`} className="text-ink underline underline-offset-2">
+                      <Link href={`/admin/students/${r.rosterId}`} prefetch={false} className="text-ink underline underline-offset-2">
                         {r.studentName}
                       </Link>
                     </td>

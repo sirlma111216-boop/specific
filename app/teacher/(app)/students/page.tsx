@@ -147,6 +147,8 @@ export default function TeacherStudentsPage() {
                   <td className="px-4 py-3">
                     <Link
                       href={`/teacher/students/${s.rosterId}`}
+                      // 학생 수만큼 상세 페이지를 미리 가져오면 목록을 열 때마다 서버 호출이 25번 나간다
+                      prefetch={false}
                       className="text-ink underline underline-offset-2"
                     >
                       {s.studentName}

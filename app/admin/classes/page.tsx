@@ -54,7 +54,7 @@ export default function AdminClassesPage() {
               {classes.map((c) => (
                 <tr key={c.classId} className="border-t border-hairline">
                   <td className="px-4 py-3">
-                    <Link href={`/admin/classes/${c.classId}`} className="text-ink underline underline-offset-2">
+                    <Link href={`/admin/classes/${c.classId}`} prefetch={false} className="text-ink underline underline-offset-2">
                       {formatClassFull(c.schoolYear, c.grade, c.classNumber)}
                     </Link>
                     {c.isTest && <Badge tone="coral" className="ml-2">테스트</Badge>}

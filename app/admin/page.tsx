@@ -73,7 +73,7 @@ export default function AdminDashboard() {
             <ul className="divide-y divide-hairline">
               {data.classesWithoutTeacher.map((c) => (
                 <li key={c.classId} className="flex flex-wrap items-center gap-3 px-5 py-3 text-[14px]">
-                  <Link href={`/admin/classes/${c.classId}`} className="text-ink underline underline-offset-2">
+                  <Link href={`/admin/classes/${c.classId}`} prefetch={false} className="text-ink underline underline-offset-2">
                     {formatClassFull(c.schoolYear, c.grade, c.classNumber)}
                   </Link>
                   <span className="text-muted">담임 {c.teacherName}</span>
@@ -122,7 +122,7 @@ export default function AdminDashboard() {
             <ul className="divide-y divide-hairline">
               {lowSignup.map((c) => (
                 <li key={c.classId} className="flex flex-wrap items-center gap-3 px-5 py-3 text-[14px]">
-                  <Link href={`/admin/classes/${c.classId}`} className="text-ink underline underline-offset-2">
+                  <Link href={`/admin/classes/${c.classId}`} prefetch={false} className="text-ink underline underline-offset-2">
                     {formatClassFull(c.schoolYear, c.grade, c.classNumber)}
                   </Link>
                   <span className="text-muted">
