@@ -9,7 +9,8 @@ import { sanitizeForm } from "@/lib/forms/sanitize-server";
 import { commitInChunks } from "@/lib/firebase/batch";
 import { rosterCountField } from "@/lib/events/counters";
 import { rostersWithMaterialFor } from "@/lib/events/material";
-import { isValidIsoDate } from "@/lib/utils";
+import { isPastDue, openUntilFor } from "@/lib/events/phase";
+import { isValidIsoDate, todayInKST } from "@/lib/utils";
 import type { Category, EventDoc, EventStatus } from "@/lib/types";
 
 interface PatchBody {
@@ -48,6 +49,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ eventI
     const db = adminDb();
 
     const update: Partial<EventDoc> = { updatedAt: Date.now() };
+    // 마감·예정으로 되돌릴 때는 열어 둔 기한을 지운다. (남아 있으면 다음에 열 때 헷갈린다)
+    let clearOpenUntil = false;
 
     if (body.title !== undefined) {
       const title = body.title.trim();
@@ -64,7 +67,30 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ eventI
       if (!STATUSES.includes(body.status as EventStatus)) {
         throw badRequest("활동 상태 값이 올바르지 않습니다.");
       }
-      update.status = body.status as EventStatus;
+      const next = body.status as EventStatus;
+      update.status = next;
+      if (next === "open") {
+        // 열어 둔 활동이 영영 열린 채로 남지 않도록, 열 때 언제까지 열지 함께 못 박는다.
+        // 앞으로 올 활동은 활동 당일까지, 지나간 활동을 '다시 열기'로 열면 오늘까지.
+        update.openUntil = openUntilFor(update.eventDate ?? event.eventDate, todayInKST());
+      } else {
+        clearOpenUntil = true;
+      }
+    } else if (
+      event.status === "open" &&
+      update.eventDate !== undefined &&
+      update.eventDate !== event.eventDate
+    ) {
+      // 열어 둔 활동의 날짜만 바꾼 경우. (기본 정보 편집은 날짜를 늘 함께 보내므로 실제로 바뀐 때만)
+      // 아직 열려 있으면 기한이 새 날짜를 따라가고, 이미 기한이 지나 닫혔으면
+      // 새 날짜 기준의 보통 일정(예정 → 당일 작성)으로 되돌린다. 저절로 다시 열리지 않게 하기 위함.
+      const today = todayInKST();
+      if (isPastDue(event.status, event.eventDate, today, event.openUntil)) {
+        update.status = "scheduled";
+        clearOpenUntil = true;
+      } else {
+        update.openUntil = openUntilFor(update.eventDate, today);
+      }
     }
     if (body.isTest !== undefined) update.isTest = Boolean(body.isTest);
     if (body.form !== undefined) update.form = sanitizeForm(body.form);
@@ -93,7 +119,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ eventI
       movedCounters = rosterIds.size;
     }
 
-    await ref.update(update);
+    await ref.update(clearOpenUntil ? { ...update, openUntil: FieldValue.delete() } : update);
     const fresh = await ref.get();
     const saved = fresh.data() as EventDoc;
     invalidateEvents();

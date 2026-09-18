@@ -40,14 +40,15 @@ export async function POST(req: Request) {
     const today = todayInKST();
 
     // 이미 작성했는지와 무관하게 "지금 쓸 수 있는 활동인가"만 본다.
-    // 그래야 당일에 쓴 학생도 날짜가 지나면 수정하지 못하고 조회만 하게 된다.
-    if (!canWriteNow(event.status, event.eventDate, today)) {
+    // 마감 전이면 학생이 자기 기록을 다시 저장해 고칠 수 있고,
+    // 마감된 뒤에는 그날 쓴 학생도 고치지 못하고 조회만 하게 된다.
+    if (!canWriteNow(event.status, event.eventDate, today, event.openUntil)) {
       if (event.status === "scheduled" && event.eventDate > today) {
         throw forbidden("아직 작성할 수 없는 활동입니다.");
       }
       throw forbidden(
-        isPastDue(event.status, event.eventDate, today)
-          ? "작성 기간이 지났습니다. 활동 당일에만 작성할 수 있습니다. 담임 선생님께 문의해주세요."
+        isPastDue(event.status, event.eventDate, today, event.openUntil)
+          ? "작성 기간이 지났습니다. 담임 선생님께 문의해주세요."
           : "마감된 활동입니다. 담임 선생님께 문의해주세요.",
       );
     }

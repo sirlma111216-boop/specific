@@ -4,7 +4,8 @@ import { requireStaff } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
 import { resolveForm } from "@/lib/forms/schema";
 import { invalidateEvents } from "@/lib/events/load";
-import { isValidIsoDate } from "@/lib/utils";
+import { openUntilFor } from "@/lib/events/phase";
+import { isValidIsoDate, todayInKST } from "@/lib/utils";
 import type { EventDoc, EventStatus } from "@/lib/types";
 
 interface Body {
@@ -45,6 +46,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ eventId
       guidance: src.guidance,
       eventDate,
       status,
+      // '지금 공개'로 복사해도 기한을 둔다. 날짜가 지나면 저절로 마감된다.
+      ...(status === "open" ? { openUntil: openUntilFor(eventDate, todayInKST()) } : {}),
       createdAt: now,
       updatedAt: now,
       createdBy: ctx.uid,

@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { canWriteNow, computeEventPhase, emptyRecordText, isPastDue } from "@/lib/events/phase";
+import {
+  canWriteNow,
+  computeEventPhase,
+  emptyRecordText,
+  isPastDue,
+  openUntilFor,
+} from "@/lib/events/phase";
 import { todayInKST } from "@/lib/utils";
 
 const TODAY = "2026-08-20";
 const YESTERDAY = "2026-08-19";
 const TOMORROW = "2026-08-21";
+const TWO_DAYS_AGO = "2026-08-18";
+const DAY_AFTER_TOMORROW = "2026-08-22";
 
 describe("활동 상태 계산", () => {
   describe("교사가 따로 손대지 않은 활동(scheduled)", () => {
@@ -30,8 +38,9 @@ describe("활동 상태 계산", () => {
       expect(computeEventPhase("open", TOMORROW, TODAY, false)).toBe("writable");
     });
 
-    it("'다시 열기'하면 날짜가 지났어도 쓸 수 있다", () => {
-      expect(computeEventPhase("open", YESTERDAY, TODAY, false)).toBe("writable");
+    it("'다시 열기'하면 날짜가 지났어도 오늘은 쓸 수 있다", () => {
+      // 다시 열면 서버가 openUntil 을 오늘로 잡는다
+      expect(computeEventPhase("open", YESTERDAY, TODAY, false, TODAY)).toBe("writable");
     });
 
     it("'마감'하면 당일이어도 쓸 수 없다", () => {
@@ -40,6 +49,31 @@ describe("활동 상태 계산", () => {
 
     it("마감해도 이미 쓴 기록은 조회된다", () => {
       expect(computeEventPhase("closed", TODAY, TODAY, true)).toBe("submitted");
+    });
+  });
+
+  describe("열어 둔 활동도 기한이 지나면 저절로 마감된다", () => {
+    it("다시 연 활동은 다음 날 마감된다", () => {
+      expect(computeEventPhase("open", TWO_DAYS_AGO, TODAY, false, YESTERDAY)).toBe("closed");
+      expect(canWriteNow("open", TWO_DAYS_AGO, TODAY, YESTERDAY)).toBe(false);
+    });
+
+    it("'지금 공개'한 활동은 활동 당일까지 열려 있다", () => {
+      expect(computeEventPhase("open", TOMORROW, TODAY, false, TOMORROW)).toBe("writable");
+      expect(computeEventPhase("open", TOMORROW, DAY_AFTER_TOMORROW, false, TOMORROW)).toBe(
+        "closed",
+      );
+    });
+
+    it("기한이 없던 예전 '지금 공개' 활동은 날짜가 지나면 마감된다", () => {
+      expect(computeEventPhase("open", YESTERDAY, TODAY, false)).toBe("closed");
+      expect(computeEventPhase("open", TODAY, TODAY, false)).toBe("writable");
+    });
+
+    it("열 때 기한: 앞으로 올 활동은 당일까지, 지나간 활동은 오늘까지", () => {
+      expect(openUntilFor(TOMORROW, TODAY)).toBe(TOMORROW);
+      expect(openUntilFor(TODAY, TODAY)).toBe(TODAY);
+      expect(openUntilFor(TWO_DAYS_AGO, TODAY)).toBe(TODAY);
     });
   });
 
@@ -52,8 +86,12 @@ describe("활동 상태 계산", () => {
       expect(isPastDue("closed", YESTERDAY, TODAY)).toBe(false);
     });
 
-    it("교사가 다시 연 경우도 기한 경과가 아니다", () => {
-      expect(isPastDue("open", YESTERDAY, TODAY)).toBe(false);
+    it("교사가 다시 연 기한 안이면 기한 경과가 아니다", () => {
+      expect(isPastDue("open", YESTERDAY, TODAY, TODAY)).toBe(false);
+    });
+
+    it("다시 연 기한이 지나면 기한 경과다", () => {
+      expect(isPastDue("open", TWO_DAYS_AGO, TODAY, YESTERDAY)).toBe(true);
     });
   });
 
@@ -78,7 +116,13 @@ describe("활동 상태 계산", () => {
     });
 
     it("교사가 다시 열면 쓸 수 있다", () => {
-      expect(canWriteNow("open", YESTERDAY, TODAY)).toBe(true);
+      expect(canWriteNow("open", YESTERDAY, TODAY, TODAY)).toBe(true);
+    });
+
+    it("마감 전이면 이미 쓴 학생도 자기 기록을 고칠 수 있다", () => {
+      // 화면에는 '작성 완료'로 보이지만, 쓰기는 열려 있다
+      expect(computeEventPhase("scheduled", TODAY, TODAY, true)).toBe("submitted");
+      expect(canWriteNow("scheduled", TODAY, TODAY)).toBe(true);
     });
   });
 

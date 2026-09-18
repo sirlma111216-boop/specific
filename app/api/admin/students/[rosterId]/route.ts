@@ -45,6 +45,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ rosterId
     const notes = new Map<string, TeacherNoteDoc>();
     noteSnap.forEach((d) => notes.set((d.data() as TeacherNoteDoc).eventId, d.data() as TeacherNoteDoc));
 
+    const absent = new Set(roster.absentEventIds ?? []);
+
     const visibleEvents = events
       .filter((e) => eventVisibleTo(e, Boolean(klass?.isTest)))
       .sort((a, b) => a.eventDate.localeCompare(b.eventDate) || a.title.localeCompare(b.title))
@@ -67,6 +69,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ rosterId
               }
             : null,
           note: n ? { noteId: n.noteId, content: n.content, updatedAt: n.updatedAt } : null,
+          absent: absent.has(e.eventId),
         };
       });
 

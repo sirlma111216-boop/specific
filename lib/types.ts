@@ -132,6 +132,12 @@ export interface EventDoc {
   /** YYYY-MM-DD (한국 날짜) */
   eventDate: string;
   status: EventStatus;
+  /**
+   * status 가 'open' 일 때, 이 날짜(YYYY-MM-DD)까지만 열어 둔다. 지나면 저절로 마감된다.
+   * 활동을 열 때 서버가 정한다 — 앞으로 올 활동이면 활동 당일까지, 지나간 활동이면 오늘까지.
+   * 값이 없는 예전 활동은 활동 당일까지로 본다. (lib/events/phase.ts)
+   */
+  openUntil?: string;
   createdAt: number;
   updatedAt: number;
   createdBy: string;
@@ -221,6 +227,11 @@ export interface StudentEventItem {
   guidance: string;
   eventDate: string;
   phase: EventPhase;
+  /**
+   * 지금 이 활동에 쓸 수 있는가. 마감 전이라면 이미 낸 기록도 고칠 수 있으므로
+   * phase('작성 완료')와 따로 내려준다.
+   */
+  canWrite: boolean;
   /** 학생 본인이 작성한 내용. 다른 학생 것은 어떤 경로로도 담기지 않는다. */
   content: string | null;
   updatedAt: number | null;

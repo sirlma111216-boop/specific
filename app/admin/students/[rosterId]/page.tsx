@@ -31,6 +31,8 @@ interface Detail {
     form: FormQuestion[];
     response: { responseId: string; content: string; answers: FormAnswers | null; updatedAt: number } | null;
     note: { noteId: string; content: string; updatedAt: number } | null;
+    /** 담임이나 슈퍼관리자가 결석으로 표시했는가 */
+    absent: boolean;
   }>;
   records: Array<{
     recordId: string;
@@ -94,6 +96,7 @@ export default function AdminStudentPage() {
     | null
   >(null);
   const [busy, setBusy] = useState(false);
+  const [savingAbsence, setSavingAbsence] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const reload = () => setReloadToken((n) => n + 1);
 
@@ -130,11 +133,38 @@ export default function AdminStudentPage() {
     }
   }
 
+  /**
+   * 결석 표시·해제. 담임 화면과 같은 자리에 저장된다.
+   * 화면 전체를 다시 불러오면 읽기가 수십 건 나가므로, 이 카드만 고친다.
+   */
+  async function toggleAbsent(eventId: string, absent: boolean) {
+    setError(null);
+    setNotice(null);
+    setSavingAbsence(eventId);
+    try {
+      await apiFetch("/api/admin/absence", {
+        method: "POST",
+        body: JSON.stringify({ rosterId, eventId, absent }),
+      });
+      setData((prev) =>
+        prev && {
+          ...prev,
+          events: prev.events.map((e) => (e.eventId === eventId ? { ...e, absent } : e)),
+        },
+      );
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSavingAbsence(null);
+    }
+  }
+
   if (error && !data) return <Alert>{error}</Alert>;
   if (!data) return <Spinner />;
 
   const { student, klass, account } = data;
-  const events = data.events.filter((e) => !onlyWritten || e.response || e.note);
+  // 결석으로 표시한 활동은 기록이 없어도 보여 준다. (표시를 풀 수 있어야 하므로)
+  const events = data.events.filter((e) => !onlyWritten || e.response || e.note || e.absent);
 
   return (
     <main>
@@ -185,7 +215,7 @@ export default function AdminStudentPage() {
         <h2 className="text-[18px] font-medium text-ink">활동 기록</h2>
         <label className="flex cursor-pointer items-center gap-2 text-[13px] text-muted">
           <input type="checkbox" checked={onlyWritten} onChange={(e) => setOnlyWritten(e.target.checked)} className="h-4 w-4 accent-[#181d26]" />
-          기록이 있는 활동만
+          기록이 있거나 결석한 활동만
         </label>
       </div>
 
@@ -196,6 +226,20 @@ export default function AdminStudentPage() {
               <Badge tone={e.category === "autonomous" ? "info" : "neutral"}>{CATEGORY_LABEL[e.category]}</Badge>
               <span className="text-[16px] font-medium text-ink">{e.title}</span>
               <span className="text-[13px] text-muted">{formatDateDots(e.eventDate)}</span>
+              {/* 담임 화면과 같은 버튼. 결석이면 담임이 특기사항에 이 활동을 체크할 수 없다. */}
+              <button
+                type="button"
+                title={
+                  e.absent
+                    ? "누르면 결석 표시를 풉니다."
+                    : "이 활동에 결석했다면 눌러주세요. 담임이 특기사항에 체크할 수 없게 됩니다."
+                }
+                disabled={savingAbsence === e.eventId}
+                onClick={() => toggleAbsent(e.eventId, !e.absent)}
+                className="cursor-pointer rounded-sm disabled:cursor-wait disabled:opacity-60"
+              >
+                <Badge tone={e.absent ? "danger" : "muted"}>{e.absent ? "결석" : "결석확인"}</Badge>
+              </button>
             </div>
 
             <div className="mt-4">
@@ -316,7 +360,7 @@ export default function AdminStudentPage() {
         ))}
         {events.length === 0 && (
           <Card className="py-10 text-center text-muted">
-            {onlyWritten ? "기록이 있는 활동이 없습니다." : "활동이 없습니다."}
+            {onlyWritten ? "기록이 있거나 결석한 활동이 없습니다." : "활동이 없습니다."}
           </Card>
         )}
       </div>

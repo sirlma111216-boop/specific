@@ -3,7 +3,7 @@ import { badRequest } from "@/lib/api-error";
 import { requireStaff } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
 import { DEFAULT_GUIDANCE } from "@/lib/events/defaults";
-import { computeEventPhase } from "@/lib/events/phase";
+import { computeEventPhase, openUntilFor } from "@/lib/events/phase";
 import { safeCount } from "@/lib/events/counters";
 import { invalidateEvents, loadAllEvents } from "@/lib/events/load";
 import { loadAllClasses } from "@/lib/admin/lookup";
@@ -50,7 +50,7 @@ export async function GET(req: Request) {
         ...e,
         submittedCount: safeCount(e.submittedCount),
         questionCount: resolveForm(e.form).length,
-        phase: computeEventPhase(e.status, e.eventDate, today, false),
+        phase: computeEventPhase(e.status, e.eventDate, today, false, e.openUntil),
       }));
 
     return { events: eventList, studentCount, classCount, today };
@@ -85,6 +85,8 @@ export async function POST(req: Request) {
       guidance,
       eventDate,
       status,
+      // '지금 공개'로 만들어도 기한을 둔다. 날짜가 지나면 저절로 마감된다.
+      ...(status === "open" ? { openUntil: openUntilFor(eventDate, todayInKST()) } : {}),
       createdAt: now,
       updatedAt: now,
       createdBy: ctx.uid,

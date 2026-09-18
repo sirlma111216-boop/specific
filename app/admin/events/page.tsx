@@ -44,6 +44,12 @@ const EMPTY: EventBasics = {
   guidance: DEFAULT_GUIDANCE,
 };
 
+/** 관리자가 연 활동이 언제까지 열려 있는지. 기한이 없던 예전 활동은 활동 당일까지다. */
+function openWindowLabel(event: Pick<EventDoc, "eventDate" | "openUntil">): string {
+  const until = event.openUntil || event.eventDate;
+  return until === todayInKST() ? "오늘까지 열림" : `${formatDateDots(until)}까지 열림`;
+}
+
 /** 날짜를 1년 뒤로. 복사할 때 기본값으로 쓴다. (2월 29일은 2월 28일로) */
 function plusOneYear(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
@@ -158,6 +164,8 @@ export default function AdminEventsPage() {
           <p className="prose-ko mt-2 max-w-[620px] text-[14px] text-muted">
             여기서 등록한 활동은 <strong className="text-ink">모든 학급 학생</strong>에게 똑같이
             열립니다. 학생은 활동 당일에만 답할 수 있고, 날짜가 지나면 자동으로 마감됩니다.
+            마감된 활동을 <strong className="text-ink">다시 열기</strong>로 열면 오늘 하루만
+            열리고 내일 저절로 마감됩니다.
             <strong className="text-ink"> 테스트</strong> 활동은 연수용 테스트 계정에게만 보입니다.
           </p>
         </div>
@@ -275,6 +283,10 @@ function EventCard({
         <Badge tone={event.phase === "closed" ? "muted" : "neutral"}>
           {PHASE_LABEL[event.phase]}
         </Badge>
+        {/* 관리자가 연 활동은 언제 저절로 닫히는지 보여 준다 */}
+        {event.status === "open" && event.phase === "writable" && (
+          <Badge tone="muted">{openWindowLabel(event)}</Badge>
+        )}
         <Badge tone="muted">질문 {event.questionCount}개</Badge>
         <span className="ml-auto text-[13px] text-muted">
           {event.submittedCount}/{event.isTest ? "테스트" : `${studentCount}명`} 작성
@@ -302,7 +314,13 @@ function EventCard({
           {panel === "participation" ? "현황 닫기" : "참여 현황"}
         </Button>
         {event.phase === "scheduled" && (
-          <Button size="sm" variant="secondary" onClick={() => onPatch({ status: "open" })}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() =>
+              onPatch({ status: "open" }, "지금 공개했습니다. 활동 날짜가 지나면 저절로 마감됩니다.")
+            }
+          >
             지금 공개
           </Button>
         )}
@@ -312,7 +330,13 @@ function EventCard({
           </Button>
         )}
         {event.phase === "closed" && (
-          <Button size="sm" variant="secondary" onClick={() => onPatch({ status: "open" })}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() =>
+              onPatch({ status: "open" }, "다시 열었습니다. 내일이 되면 저절로 마감됩니다.")
+            }
+          >
             다시 열기
           </Button>
         )}

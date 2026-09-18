@@ -1,7 +1,7 @@
 import { adminDb, COL } from "@/lib/firebase/admin";
 import { requireStudent } from "@/lib/auth/server";
 import { route } from "@/lib/route-helpers";
-import { computeEventPhase } from "@/lib/events/phase";
+import { canWriteNow, computeEventPhase } from "@/lib/events/phase";
 import { loadAllEvents } from "@/lib/events/load";
 import { eventVisibleTo } from "@/lib/events/visibility";
 import { resolveForm } from "@/lib/forms/schema";
@@ -42,7 +42,8 @@ export async function GET(req: Request) {
           description: e.description,
           guidance: e.guidance,
           eventDate: e.eventDate,
-          phase: computeEventPhase(e.status, e.eventDate, today, hasResponse),
+          phase: computeEventPhase(e.status, e.eventDate, today, hasResponse, e.openUntil),
+          canWrite: canWriteNow(e.status, e.eventDate, today, e.openUntil),
           content: mine?.content ?? null,
           updatedAt: mine?.updatedAt ?? null,
           form: resolveForm(e.form),
