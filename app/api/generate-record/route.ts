@@ -5,8 +5,13 @@ import { readJson, route } from "@/lib/route-helpers";
 import { eventVisibleTo } from "@/lib/events/visibility";
 import { loadAllEvents } from "@/lib/events/load";
 import { GeminiError, isGeminiConfigured } from "@/lib/gemini/client";
-import { generateStudentRecord } from "@/lib/record-generator/generate";
+import {
+  generateStudentRecord,
+  type SelectablePersonalActivity,
+} from "@/lib/record-generator/generate";
 import type { SelectableEvent } from "@/lib/record-generator/select";
+import { formatActivityPeriod } from "@/lib/activities/personal";
+import { addReads } from "@/lib/firebase/read-meter";
 import { MAX_TARGET_LENGTH, MIN_TARGET_LENGTH } from "@/lib/events/defaults";
 import { formatOfficerTerms } from "@/lib/roster/officer";
 import { ApiError } from "@/lib/api-error";
@@ -14,6 +19,7 @@ import type {
   Category,
   ClassDoc,
   EventDoc,
+  PersonalActivityDoc,
   ResponseDoc,
   RosterDoc,
   SelectionMode,
@@ -24,6 +30,7 @@ interface Body {
   rosterId?: string;
   category?: string;
   selectedEventIds?: string[];
+  selectedPersonalIds?: string[];
   selectionOrder?: Record<string, number>;
   selectionMode?: string;
   targetLength?: number;
@@ -50,6 +57,9 @@ export async function POST(req: Request) {
     const selectionMode = (body.selectionMode as SelectionMode) ?? "priority";
     const targetLength = Number(body.targetLength);
     const selectedEventIds = Array.isArray(body.selectedEventIds) ? body.selectedEventIds : [];
+    const selectedPersonalIds = Array.isArray(body.selectedPersonalIds)
+      ? Array.from(new Set(body.selectedPersonalIds.filter(Boolean)))
+      : [];
     const selectionOrder = body.selectionOrder ?? {};
 
     if (!rosterId) throw badRequest("학생을 선택해주세요.");
@@ -58,7 +68,9 @@ export async function POST(req: Request) {
     if (!Number.isFinite(targetLength) || targetLength < MIN_TARGET_LENGTH || targetLength > MAX_TARGET_LENGTH) {
       throw badRequest(`목표 글자 수는 ${MIN_TARGET_LENGTH}~${MAX_TARGET_LENGTH} 사이로 입력해주세요.`);
     }
-    if (selectedEventIds.length === 0) throw badRequest("반영할 활동을 하나 이상 선택해주세요.");
+    if (selectedEventIds.length === 0 && selectedPersonalIds.length === 0) {
+      throw badRequest("반영할 활동을 하나 이상 선택해주세요.");
+    }
 
     const db = adminDb();
     const rosterSnap = await db.collection(COL.roster).doc(rosterId).get();
@@ -127,6 +139,29 @@ export async function POST(req: Request) {
     const officerTerms =
       category === "autonomous" ? formatOfficerTerms(roster.officerTerms ?? []) : [];
 
+    // 담당 교사가 따로 남긴 개인 활동. 자율 영역에서만 쓰며, 다른 학생 것이 섞이지 않게 확인한다.
+    const personalActivities: SelectablePersonalActivity[] = [];
+    if (category === "autonomous" && selectedPersonalIds.length > 0) {
+      const snaps = await db.getAll(
+        ...selectedPersonalIds.map((id) => db.collection(COL.personalActivities).doc(id)),
+      );
+      addReads(snaps.length);
+      for (const snap of snaps) {
+        const a = snap.data() as PersonalActivityDoc | undefined;
+        if (!a || a.rosterId !== rosterId) {
+          throw badRequest("선택한 개인 활동 기록 중 찾을 수 없는 항목이 있습니다.");
+        }
+        personalActivities.push({
+          activityId: a.activityId,
+          title: a.title,
+          period: formatActivityPeriod(a.startDate, a.endDate),
+          content: a.content,
+        });
+      }
+      // 일자 순으로 서술되도록 정렬해서 넘긴다.
+      personalActivities.sort((x, y) => x.period.localeCompare(y.period));
+    }
+
     try {
       const result = await generateStudentRecord({
         category,
@@ -134,6 +169,7 @@ export async function POST(req: Request) {
         selectionMode,
         events,
         officerTerms,
+        personalActivities,
         identifiersToRedact,
       });
 
@@ -142,7 +178,10 @@ export async function POST(req: Request) {
         characterCount: result.characterCount,
         targetLength,
         usedEventIds: result.usedEventIds,
-        usedEventTitles: result.usedEventTitles,
+        usedEventTitles: [
+          ...personalActivities.map((a) => a.title),
+          ...result.usedEventTitles,
+        ],
         remainingIssues: result.remainingIssues.map((i) => ({ code: i.code, message: i.message })),
         repairAttempts: result.repairAttempts,
         // 개인정보가 제거된 실제 전송 payload (교사가 직접 확인할 수 있도록 그대로 반환)

@@ -27,7 +27,7 @@ describe.skipIf(!enabled)("임원 문장 실호출", () => {
         category: "autonomous",
         targetLength: 400,
         selectionMode: "priority",
-        officerTerms: [OFFICER],
+        officerTerms: [{ term: OFFICER, leadership: "학급 회의를 끝까지 진행하고 의견을 모음" }],
         events: [
           {
             eventId: "a",

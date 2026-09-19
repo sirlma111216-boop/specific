@@ -74,6 +74,7 @@ export const COL = {
   responses: "responses",
   notes: "teacherNotes",
   records: "studentRecords",
+  personalActivities: "personalActivities",
 } as const;
 
 /** app_name/{id} 문서 id 규칙 — 같은 학생·같은 이벤트에 중복 응답이 생기지 않게 한다. */

@@ -9,6 +9,7 @@ export type IssueCode =
   | "fabricated_detail"
   | "missing_date"
   | "officer_missing"
+  | "personal_missing"
   | "foreign_script"
   | "observer_voice"
   | "connective_word";
@@ -34,6 +35,15 @@ export interface ValidationInput {
   }>;
   /** 기재요령 형식으로 완성된 임원 재임 표기. 있으면 첫 문장에 나와야 한다. */
   officerTerms?: string[];
+  /** 담임이 적은 한 줄 리더십 메모. 근거 자료이므로 허구 판정에서 제외한다. */
+  officerNotes?: string[];
+  /** 담당 교사가 따로 남긴 개인 활동. 교사가 확인한 사실이라 근거 자료로 본다. */
+  personalActivities?: Array<{
+    title: string;
+    /** 생기부 표기 날짜. 본문에 들어갔는지 확인하는 데 쓴다. */
+    activityDate?: string;
+    content: string;
+  }>;
 }
 
 export interface ValidationResult {
@@ -185,6 +195,8 @@ function mentionsEvent(text: string, title: string): boolean {
 export function validateRecordDraft(input: ValidationInput): ValidationResult {
   const { text, targetLength, tolerance = 0.05, events } = input;
   const officerTerms = input.officerTerms ?? [];
+  const officerNotes = input.officerNotes ?? [];
+  const personalActivities = input.personalActivities ?? [];
   const issues: ValidationIssue[] = [];
   const characterCount = countCharacters(text);
 
@@ -252,9 +264,14 @@ export function validateRecordDraft(input: ValidationInput): ValidationResult {
   }
 
   // 검증 6 — 원본에 없는 구체적 행동·성취
-  // 임원 재임은 교사가 직접 입력한 확인된 사실이므로 근거 자료에 포함한다.
-  // (이게 없으면 '회장' 같은 단어가 허구 성취로 잘못 걸린다)
-  const sourceText = [...events.map((e) => e.studentReflection ?? ""), ...officerTerms].join(" ");
+  // 임원 재임과 담당 교사가 남긴 개인 활동은 교사가 확인한 사실이므로 근거 자료에 포함한다.
+  // (이게 없으면 '회장', '대표로' 같은 단어가 허구 성취로 잘못 걸린다)
+  const sourceText = [
+    ...events.map((e) => e.studentReflection ?? ""),
+    ...officerTerms,
+    ...officerNotes,
+    ...personalActivities.map((a) => `${a.title} ${a.content}`),
+  ].join(" ");
   const fabricated = [...FABRICATION_MARKERS, ...FORBIDDEN_PROPER_NOUNS].filter(
     (marker) => text.includes(marker) && !sourceText.includes(marker),
   );
@@ -268,9 +285,12 @@ export function validateRecordDraft(input: ValidationInput): ValidationResult {
 
   // 검증 7 — 활동명 뒤 날짜 표기 (기재요령 관례)
   // 본문에 언급된 활동만 본다. 분량 때문에 아예 빠진 활동은 여기서 문제 삼지 않는다.
-  const missingDates = events
-    .filter((e) => e.eventDate && mentionsEvent(text, e.title) && !text.includes(e.eventDate))
-    .map((e) => `${e.title}(${e.eventDate})`);
+  const missingDates = [
+    ...events.map((e) => ({ title: e.title, date: e.eventDate })),
+    ...personalActivities.map((a) => ({ title: a.title, date: a.activityDate })),
+  ]
+    .filter((e) => e.date && mentionsEvent(text, e.title) && !text.includes(e.date))
+    .map((e) => `${e.title}(${e.date})`);
   if (missingDates.length > 0) {
     issues.push({
       code: "missing_date",
@@ -298,6 +318,20 @@ export function validateRecordDraft(input: ValidationInput): ValidationResult {
         instruction: `임원 활동을 맨 앞으로 옮겨라. 첫 문장이 "${officerTerms[0]}"으로 시작해야 한다.`,
       });
     }
+  }
+
+  // 검증 8-2 — 담임이 체크한 개인 활동이 빠지지 않았는가
+  // 담당 교사가 확인해 남긴 활동이고 담임이 직접 골랐으므로, 분량을 이유로 빠지면 안 된다.
+  // (이 누락을 막는 것이 개인 활동 기록을 앱으로 옮긴 이유다)
+  const missingPersonal = personalActivities
+    .filter((a) => !mentionsEvent(text, a.title))
+    .map((a) => a.title);
+  if (missingPersonal.length > 0) {
+    issues.push({
+      code: "personal_missing",
+      message: `담임이 체크한 개인 활동이 빠졌습니다. (${missingPersonal.join(", ")})`,
+      instruction: `담당 교사가 기록한 개인 활동(${missingPersonal.join(", ")})을 반드시 포함하라. 활동명 뒤 괄호에 주어진 날짜를 그대로 넣고, 메모를 옮겨 적지 말고 교사 관찰자 시점으로 압축해 1~2문장으로 써라.`,
+    });
   }
 
   // 검증 9 — 한자·가나·전각기호

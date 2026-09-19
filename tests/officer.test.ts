@@ -8,7 +8,6 @@ import {
 
 const base: OfficerTerm = {
   period: "first",
-  scope: "class",
   role: "president",
   startDate: "2026-03-01",
   endDate: "2026-08-18",
@@ -31,24 +30,9 @@ describe("임원 재임 표기", () => {
     );
   });
 
-  // 기재요령 예시: 1학년: 1학기 전교 학생자치회 부회장(2026.03.01.-2026.08.18.)
-  it("전교 임원은 '학생자치회'를 넣는다", () => {
-    expect(
-      formatOfficerTerm({ ...base, scope: "school", role: "vicePresident" }),
-    ).toBe("1학기 전교 학생자치회 부회장(2026.03.01.-2026.08.18.)");
-  });
-
-  // 기재요령 예시: 3학년: 전교 학생자치회 회장(2026.03.01.-2027.02.03.)
-  it("학년 단위 재임은 학기 표기를 붙이지 않는다", () => {
-    expect(
-      formatOfficerTerm({
-        period: "year",
-        scope: "school",
-        role: "president",
-        startDate: "2026-03-01",
-        endDate: "2027-02-03",
-      }),
-    ).toBe("전교 학생자치회 회장(2026.03.01.-2027.02.03.)");
+  // 전교 회장·부회장은 학생회 기록이라 담임이 아닌 담당 교사가 '활동 입력'으로 남긴다.
+  it("임원은 언제나 학급 임원으로 표기한다", () => {
+    expect(formatOfficerTerm({ ...base, role: "vicePresident" })).not.toContain("전교");
   });
 });
 
@@ -61,25 +45,33 @@ describe("임원 입력 검증", () => {
     expect(isCompleteOfficerTerm(undefined)).toBe(false);
   });
 
-  it("덜 채워진 항목은 목록에서 걸러진다", () => {
-    const terms = [base, { ...base, period: "second" as const, endDate: "" }];
-    expect(formatOfficerTerms(terms)).toEqual(["1학기 학급회장(2026.03.01.-2026.08.18.)"]);
+  it("리더십 메모는 없어도 인정한다", () => {
+    expect(isCompleteOfficerTerm({ ...base, note: undefined })).toBe(true);
   });
 
-  it("1학기·2학기를 함께 적을 수 있다", () => {
+  it("덜 채워진 항목은 목록에서 걸러진다", () => {
+    const terms = [base, { ...base, period: "second" as const, endDate: "" }];
+    expect(formatOfficerTerms(terms)).toEqual([
+      { term: "1학기 학급회장(2026.03.01.-2026.08.18.)", leadership: "" },
+    ]);
+  });
+
+  it("1학기·2학기를 함께 적을 수 있고, 리더십 메모가 함께 실린다", () => {
     const terms: OfficerTerm[] = [
-      base,
+      { ...base, note: "학급 회의를 끝까지 진행함" },
       {
         period: "second",
-        scope: "class",
         role: "vicePresident",
         startDate: "2026-08-19",
         endDate: "2027-02-05",
       },
     ];
     expect(formatOfficerTerms(terms)).toEqual([
-      "1학기 학급회장(2026.03.01.-2026.08.18.)",
-      "2학기 학급부회장(2026.08.19.-2027.02.05.)",
+      {
+        term: "1학기 학급회장(2026.03.01.-2026.08.18.)",
+        leadership: "학급 회의를 끝까지 진행함",
+      },
+      { term: "2학기 학급부회장(2026.08.19.-2027.02.05.)", leadership: "" },
     ]);
   });
 });
@@ -102,19 +94,25 @@ describe("임원 표기와 개인정보 제거", () => {
         teacherSelectionOrder: 1,
       },
     ],
-    officerTerms: ["1학기 학급회장(2026.03.01.-2026.08.18.)"],
+    officerTerms: [
+      { term: "1학기 학급회장(2026.03.01.-2026.08.18.)", leadership: "학급 회의를 끝까지 진행함" },
+    ],
     identifiersToRedact: ["김민서", "한빛중학교"],
   };
 
   it("임원 표기가 payload에 그대로 실린다", () => {
     const payload = sanitizeRecordGenerationPayload(input);
-    expect(payload.officerTerms).toEqual(["1학기 학급회장(2026.03.01.-2026.08.18.)"]);
+    expect(payload.officerTerms).toEqual([
+      { term: "1학기 학급회장(2026.03.01.-2026.08.18.)", leadership: "학급 회의를 끝까지 진행함" },
+    ]);
   });
 
-  it("임원 표기에도 실명 마스킹이 적용된다", () => {
+  it("임원 표기와 리더십 메모에도 실명 마스킹이 적용된다", () => {
     const payload = sanitizeRecordGenerationPayload({
       ...input,
-      officerTerms: ["1학기 학급회장 김민서(2026.03.01.-2026.08.18.)"],
+      officerTerms: [
+        { term: "1학기 학급회장 김민서(2026.03.01.-2026.08.18.)", leadership: "김민서가 회의를 이끎" },
+      ],
     });
     expect(JSON.stringify(payload)).not.toContain("김민서");
   });

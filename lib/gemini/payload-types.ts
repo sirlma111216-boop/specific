@@ -33,15 +33,30 @@ export type GeminiEventPayload = NoPersonalInfo<{
   teacherSelectionOrder: number;
 }>;
 
+/**
+ * 자치활동 임원 1건.
+ * term 은 이미 기재요령 형식으로 완성된 문자열이라 학생을 특정하지 않는다.
+ * leadership 은 담임이 적은 한 줄 근거 메모이며, 결과에 그대로 옮기지 않고 다시 쓴다.
+ */
+export type GeminiOfficerPayload = NoPersonalInfo<{
+  term: string;
+  leadership: string;
+}>;
+
+/** 담당 교사가 따로 남긴 개인 활동 1건 (도서관 행사·학생회 활동 등) */
+export type GeminiPersonalActivityPayload = NoPersonalInfo<{
+  title: string;
+  /** 기재요령 표기. 하루면 "2026.03.05.", 기간이면 "2026.03.05.-2026.03.07." */
+  activityDate: string;
+  content: string;
+}>;
+
 export type GeminiRequestPayload = NoPersonalInfo<{
   category: Category;
   targetLength: number;
   selectionMode: SelectionMode;
   events: GeminiEventPayload[];
-  /**
-   * 자치활동 임원 재임 표기. 이미 기재요령 형식으로 완성된 문자열만 넣는다.
-   * 예: "1학기 학급회장(2026.03.01.-2026.08.18.)"
-   * 학급·학년·전교는 학생을 특정하지 않으므로 그대로 보내도 된다.
-   */
-  officerTerms: string[];
+  officerTerms: GeminiOfficerPayload[];
+  /** 담임이 '기록 불러오기'로 가져와 체크한 개인 활동. 교사가 확인한 사실이다. */
+  personalActivities: GeminiPersonalActivityPayload[];
 }>;

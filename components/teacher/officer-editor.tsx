@@ -8,12 +8,11 @@ import { apiFetch, errorMessage } from "@/lib/client/api";
 import {
   formatOfficerTerm,
   isCompleteOfficerTerm,
+  MAX_OFFICER_NOTE_LENGTH,
   MAX_OFFICER_TERMS,
   OFFICER_PERIOD_LABEL,
   OFFICER_ROLE_LABEL,
-  OFFICER_SCOPE_LABEL,
   type OfficerRole,
-  type OfficerScope,
   type OfficerTerm,
   type OfficerTermPeriod,
 } from "@/lib/roster/officer";
@@ -21,7 +20,7 @@ import {
 type DraftTerm = Partial<OfficerTerm>;
 
 function emptyTerm(): DraftTerm {
-  return { period: "first", scope: "class", role: "president", startDate: "", endDate: "" };
+  return { period: "first", role: "president", startDate: "", endDate: "", note: "" };
 }
 
 /**
@@ -70,8 +69,9 @@ export function OfficerEditor({
         {complete.length > 0 && <Badge tone="info">{complete.length}건</Badge>}
       </div>
       <p className="mb-4 text-[13px] leading-[1.6] text-muted">
-        임원이면 특기사항 <strong className="text-ink">맨 앞</strong>에 리더십 내용이 들어갑니다.
-        임원이 아니면 비워 두세요.
+        학급 임원이면 특기사항 <strong className="text-ink">맨 앞</strong>에 리더십 내용이
+        들어갑니다. 임원이 아니면 비워 두세요. 전교 회장·부회장은 학생회 기록이므로 담당 선생님이
+        &lsquo;활동 입력&rsquo;으로 남깁니다.
       </p>
 
       {error && <Alert>{error}</Alert>}
@@ -86,7 +86,7 @@ export function OfficerEditor({
       <div className="space-y-4">
         {terms.map((term, i) => (
           <div key={i} className="rounded-md border border-hairline p-3">
-            <div className="mb-2 grid grid-cols-3 gap-2">
+            <div className="mb-2 grid grid-cols-2 gap-2">
               <Select
                 aria-label="임기 구분"
                 value={term.period ?? "first"}
@@ -96,18 +96,6 @@ export function OfficerEditor({
                 {(Object.keys(OFFICER_PERIOD_LABEL) as OfficerTermPeriod[]).map((k) => (
                   <option key={k} value={k}>
                     {OFFICER_PERIOD_LABEL[k]}
-                  </option>
-                ))}
-              </Select>
-              <Select
-                aria-label="임원 구분"
-                value={term.scope ?? "class"}
-                onChange={(e) => update(i, { scope: e.target.value as OfficerScope })}
-                className="h-9 text-[13px]"
-              >
-                {(Object.keys(OFFICER_SCOPE_LABEL) as OfficerScope[]).map((k) => (
-                  <option key={k} value={k}>
-                    {OFFICER_SCOPE_LABEL[k]}
                   </option>
                 ))}
               </Select>
@@ -142,6 +130,16 @@ export function OfficerEditor({
                 className="h-9 text-[13px]"
               />
             </div>
+
+            {/* 특기사항 문장이 아니라 근거 메모다. 생성할 때 교사 관찰 시점으로 다시 쓰인다. */}
+            <Input
+              aria-label="어떤 리더십을 보였는지"
+              value={term.note ?? ""}
+              onChange={(e) => update(i, { note: e.target.value })}
+              maxLength={MAX_OFFICER_NOTE_LENGTH}
+              placeholder="어떤 리더십을 보였는지 한 줄 (예: 학급 회의를 끝까지 진행하고 의견을 고루 모음)"
+              className="mt-2 h-9 text-[13px]"
+            />
 
             <div className="mt-2 flex items-center justify-between gap-2">
               <span className="prose-ko min-w-0 flex-1 text-[13px] text-body">

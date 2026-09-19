@@ -185,6 +185,33 @@ export interface TeacherNoteDoc {
   updatedAt: number;
 }
 
+/**
+ * 담당 교사(일정 관리자)가 학생 개인에게 직접 남기는 활동 기록.
+ *
+ * 도서관 행사·학생부 활동처럼 학급 단위 일정에 잡히지 않는 활동은, 지금까지 담당 교사가
+ * 문서로 정리해 담임에게 보내고 담임이 옮겨 적었다. 그 과정에서 학생이 누락되거나 문구가
+ * 틀려 정정이 생겼다. 그래서 담당 교사가 이 앱에서 학생을 찾아 직접 남기고,
+ * 담임은 '기록 불러오기'로 가져다 특기사항에 반영한다.
+ *
+ * 자율·자치활동에만 쓰인다. 특기사항 문장이 아니라 간단한 사실 기록이며,
+ * 문장 다듬기는 생성 단계에서 한다.
+ */
+export interface PersonalActivityDoc {
+  activityId: string;
+  rosterId: string;
+  /** 명단 문서에서 복사. 담임이 자기 학급 것만 읽는지 확인하는 데 쓴다. */
+  classId: string;
+  title: string;
+  content: string;
+  /** YYYY-MM-DD. 하루짜리면 두 값이 같다. */
+  startDate: string;
+  endDate: string;
+  /** 입력한 계정(일정 관리자·슈퍼관리자). 고치고 지우는 것은 이 계정과 슈퍼관리자만 한다. */
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export type SelectionMode = "priority" | "random";
 
 export interface StudentRecordDoc {
@@ -195,6 +222,8 @@ export interface StudentRecordDoc {
   teacherId: string;
   category: Category;
   selectedEventIds: string[];
+  /** 담임이 '기록 불러오기'로 가져와 체크한 개인 활동 (자율 영역에서만 쓰인다) */
+  selectedPersonalIds?: string[];
   /** eventId -> 교사가 체크한 순서(1부터) */
   selectionOrder: Record<string, number>;
   selectionMode: SelectionMode;

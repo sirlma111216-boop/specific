@@ -9,6 +9,7 @@ interface Body {
   rosterId?: string;
   category?: string;
   selectedEventIds?: string[];
+  selectedPersonalIds?: string[];
   selectionOrder?: Record<string, number>;
   selectionMode?: string;
   usedEventIds?: string[];
@@ -56,6 +57,7 @@ export async function POST(req: Request) {
       teacherId: ctx.uid,
       category,
       selectedEventIds: body.selectedEventIds ?? [],
+      selectedPersonalIds: body.selectedPersonalIds ?? [],
       selectionOrder: body.selectionOrder ?? {},
       selectionMode: (body.selectionMode as SelectionMode) ?? "priority",
       usedEventIds: body.usedEventIds ?? [],

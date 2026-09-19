@@ -76,6 +76,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // 담당 교사가 학생 개인에게 남긴 활동 기록('활동 입력').
+    // 담임 화면도 관리자 화면도 서버 라우트를 통해서만 읽으므로 클라이언트에는 열지 않는다.
+    match /personalActivities/{activityId} {
+      allow read, write: if false;
+    }
+
     // 생기부 특기사항 초안/최종본: 작성한 교사만. 학생은 읽기 자체가 불가.
     match /studentRecords/{recordId} {
       allow read: if isTeacher()

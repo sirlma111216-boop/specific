@@ -59,15 +59,42 @@ export function buildSystemInstruction(category: Category, examples: string): st
 - ${CATEGORY_FULL_LABEL[category]}에서는 다음을 중심에 둔다: ${CATEGORY_FOCUS[category]}.
 - 단, 실제 활동 자료·학생 기록과 연결되지 않는 역량을 억지로 붙이지 않는다.
 
+[서술 순서 — 반드시 이 차례로 쓴다]
+1. 자치활동 임원(officerTerms)
+2. 담당 교사가 따로 기록한 개인 활동(personalActivities)
+3. 학생이 기록하고 교사가 체크한 활동(events)
+- 해당 자료가 비어 있으면 그 단계를 건너뛴다. 순서를 바꾸지 않는다.
+
 [자치활동 임원 — officerTerms가 비어 있지 않을 때만 적용]
 - 특기사항의 **첫 문장**을 임원 활동으로 시작한다. 다른 활동보다 앞에 둔다.
-- officerTerms의 문자열을 있는 그대로 문장 앞부분에 넣는다. 형식을 바꾸지 말 것.
+- officerTerms[].term 문자열을 있는 그대로 문장 앞부분에 넣는다. 형식을 바꾸지 말 것.
   예: "1학기 학급회장(2026.03.01.-2026.08.18.)으로서 급우들의 의견을 고루 수렴하고 …"
-- 임원으로서의 리더십을 서술한다: 책임감, 급우 의견 수렴, 학급 분위기 조성, 솔선수범,
-  의사소통, 갈등 조정, 학급 운영 참여 등에서 실제 자료와 어울리는 것을 고른다.
-- officerTerms가 여러 개면 학기 순서대로 이어서 쓴다.
+- officerTerms[].leadership은 담임이 적어 둔 근거 메모다. 그 문장을 그대로 옮기지 말고,
+  교사 관찰자 시점의 서술로 압축해 다시 쓴다. 메모에 없는 성과를 덧붙이지 않는다.
+- 메모가 비어 있으면 임원으로서의 일반적인 역할(책임감, 급우 의견 수렴, 학급 분위기 조성,
+  솔선수범, 의사소통, 갈등 조정) 중 실제 자료와 어울리는 것을 골라 담담하게 쓴다.
+- officerTerms가 여러 개면 학기 순서대로 이어서 쓰되, 합쳐서 2문장을 넘기지 않는다.
 - 임원 경력이 없으면(officerTerms가 빈 배열) 임원 이야기를 절대 만들어내지 않는다.
 - 임원이라는 사실 외에 확인되지 않은 구체적 성과(대회 개최, 예산 집행 등)는 지어내지 않는다.
+
+[담당 교사가 따로 기록한 개인 활동 — personalActivities]
+- 도서관 행사, 학생회 활동처럼 학급 일정 밖에서 그 학생이 한 활동을 담당 교사가 직접 남긴 것이다.
+  교사가 확인한 사실이므로 events와 같은 수준의 근거로 쓴다.
+- 임원 다음, 학생이 기록한 활동보다 앞에 쓴다.
+- content는 사실 메모이지 특기사항 문장이 아니다. **그대로 옮겨 적지 않는다.**
+  핵심만 남겨 압축하고, 교사가 관찰한 서술로 바꿔 쓴다.
+  예: content "도서부원으로 매주 목요일 점심시간 도서 대출 도우미" →
+      "도서 대출 도우미로 꾸준히 참여하며 맡은 일을 성실히 이어 가는 모습을 보임."
+- 활동명(title) 뒤 괄호에 activityDate를 그대로 넣는다. 기간이면 주어진 그대로 옮긴다.
+- 1건당 1~2문장으로 쓴다. 한 건에 분량을 몰지 않는다.
+- content에 없는 성과·역할·수상을 덧붙이지 않는다.
+
+[분량 배분 — 반드시 지킬 것]
+- 임원·개인 활동·학생 활동을 합한 전체 항목 수로 목표 글자 수를 고르게 나눈다.
+- 한 항목이 전체 분량의 40%를 넘지 않게 한다. 특히 학생 기록이 긴 활동에 몰리지 않게 한다.
+- 대신 모든 항목을 한 문장씩 늘어놓는 나열식도 피한다. 학생이 직접 쓴 활동은 성찰까지,
+  임원·개인 활동은 사실과 태도 중심으로 짧게 쓴다.
+- 분량이 모자라면 활동을 더 넣지 말고, 학생이 직접 쓴 활동의 성찰을 더 풀어 쓴다.
 
 [활동명 뒤에 날짜 표기 — 반드시 지킬 것]
 - 각 활동을 처음 언급할 때 활동명 바로 뒤 괄호 안에 eventDate 값을 그대로 넣는다.
@@ -124,9 +151,17 @@ export function buildUserPrompt(payload: GeminiRequestPayload): string {
   );
   if (payload.officerTerms.length > 0) {
     lines.push(
-      `이 학생은 자치활동 임원이다: ${payload.officerTerms.join(", ")} — 첫 문장을 이 임원 활동으로 시작하라.`,
+      `이 학생은 자치활동 임원이다: ${payload.officerTerms.map((o) => o.term).join(", ")} — 첫 문장을 이 임원 활동으로 시작하라.`,
     );
   }
+  if (payload.personalActivities.length > 0) {
+    lines.push(
+      `담당 교사가 따로 기록한 개인 활동 ${payload.personalActivities.length}건이 있다. 임원 다음, 학생 기록 활동보다 앞에 쓰고, 메모를 그대로 옮기지 말고 압축해 교사 관찰자 시점으로 다시 써라.`,
+    );
+  }
+  lines.push(
+    `전체 항목 ${payload.officerTerms.length + payload.personalActivities.length + payload.events.length}건에 목표 분량을 고르게 나누어 배분하라. 한 항목이 전체의 40%를 넘지 않게 하라.`,
+  );
   lines.push("");
   lines.push("[활동 자료 JSON]");
   lines.push(JSON.stringify(payload, null, 2));

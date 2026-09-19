@@ -4,13 +4,13 @@ import { requireTeacherWithClass } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
 import {
   isCompleteOfficerTerm,
+  MAX_OFFICER_NOTE_LENGTH,
   MAX_OFFICER_TERMS,
   type OfficerRole,
-  type OfficerScope,
   type OfficerTerm,
   type OfficerTermPeriod,
 } from "@/lib/roster/officer";
-import { isValidIsoDate } from "@/lib/utils";
+import { countCharacters, isValidIsoDate } from "@/lib/utils";
 import type { RosterDoc } from "@/lib/types";
 
 interface Body {
@@ -18,8 +18,7 @@ interface Body {
   officerTerms?: Array<Partial<OfficerTerm>>;
 }
 
-const PERIODS: OfficerTermPeriod[] = ["first", "second", "year"];
-const SCOPES: OfficerScope[] = ["class", "school"];
+const PERIODS: OfficerTermPeriod[] = ["first", "second"];
 const ROLES: OfficerRole[] = ["president", "vicePresident"];
 
 /**
@@ -43,7 +42,6 @@ export async function POST(req: Request) {
     for (const t of raw) {
       if (!isCompleteOfficerTerm(t)) continue;
       if (!PERIODS.includes(t.period)) throw badRequest("임기 구분 값이 올바르지 않습니다.");
-      if (!SCOPES.includes(t.scope)) throw badRequest("임원 구분 값이 올바르지 않습니다.");
       if (!ROLES.includes(t.role)) throw badRequest("직책 값이 올바르지 않습니다.");
       if (!isValidIsoDate(t.startDate) || !isValidIsoDate(t.endDate)) {
         throw badRequest("재임 기간 날짜를 올바르게 입력해주세요.");
@@ -51,12 +49,17 @@ export async function POST(req: Request) {
       if (t.startDate > t.endDate) {
         throw badRequest("재임 시작일이 종료일보다 늦습니다.");
       }
+      const note = (t.note ?? "").trim();
+      if (countCharacters(note) > MAX_OFFICER_NOTE_LENGTH) {
+        throw badRequest(`리더십 메모는 ${MAX_OFFICER_NOTE_LENGTH}자 이내로 적어주세요.`);
+      }
       terms.push({
         period: t.period,
-        scope: t.scope,
         role: t.role,
         startDate: t.startDate,
         endDate: t.endDate,
+        // Firestore 는 undefined 를 받지 않는다. 비었으면 필드를 넣지 않는다.
+        ...(note ? { note } : {}),
       });
     }
 

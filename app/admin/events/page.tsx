@@ -160,7 +160,7 @@ export default function AdminEventsPage() {
     <main>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-[32px] leading-[1.2] text-ink">자율·진로 활동</h1>
+          <h1 className="text-[32px] leading-[1.2] text-ink">활동 계획</h1>
           <p className="prose-ko mt-2 max-w-[620px] text-[14px] text-muted">
             여기서 등록한 활동은 <strong className="text-ink">모든 학급 학생</strong>에게 똑같이
             열립니다. 학생은 활동 당일에만 답할 수 있고, 날짜가 지나면 자동으로 마감됩니다.

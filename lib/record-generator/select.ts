@@ -17,9 +17,20 @@ export interface SelectableEvent {
  */
 export const CHARS_PER_EVENT = 100;
 
-export function computeCapacity(targetLength: number, totalEvents: number): number {
+/**
+ * 목표 글자 수로 이번에 쓸 활동 수를 정한다.
+ *
+ * reservedItems 는 활동 말고도 반드시 들어가는 항목 수다 — 자치활동 임원, 담당 교사가
+ * 따로 남긴 개인 활동. 이것들이 이미 분량을 차지하므로 그만큼 활동을 덜 고른다.
+ * 그러지 않으면 항목이 많아져 한 활동당 한 문장씩 늘어놓는 나열식이 된다.
+ */
+export function computeCapacity(
+  targetLength: number,
+  totalEvents: number,
+  reservedItems = 0,
+): number {
   if (totalEvents <= 0) return 0;
-  const raw = Math.round(targetLength / CHARS_PER_EVENT);
+  const raw = Math.round(targetLength / CHARS_PER_EVENT) - Math.max(0, reservedItems);
   return Math.min(totalEvents, Math.max(1, raw));
 }
 
@@ -45,6 +56,8 @@ export function sortByPriority(events: SelectableEvent[]): SelectableEvent[] {
 export interface SelectOptions {
   mode: SelectionMode;
   targetLength: number;
+  /** 임원·개인 활동처럼 활동 목록 밖에서 이미 분량을 차지하는 항목 수 */
+  reservedItems?: number;
   rng?: () => number;
 }
 
@@ -56,10 +69,10 @@ export interface SelectOptions {
  */
 export function selectEventsForGeneration(
   events: SelectableEvent[],
-  { mode, targetLength, rng = Math.random }: SelectOptions,
+  { mode, targetLength, reservedItems = 0, rng = Math.random }: SelectOptions,
 ): SelectableEvent[] {
   if (events.length === 0) return [];
-  const capacity = computeCapacity(targetLength, events.length);
+  const capacity = computeCapacity(targetLength, events.length, reservedItems);
 
   if (mode === "priority") {
     return sortByPriority(events).slice(0, capacity);

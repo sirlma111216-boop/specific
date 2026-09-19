@@ -12,7 +12,17 @@ import {
 } from "@/lib/record-validator/validate";
 import { countCharacters, formatRecordDate } from "@/lib/utils";
 import type { Category, SelectionMode } from "@/lib/types";
+import type { OfficerTermForRecord } from "@/lib/roster/officer";
 import { selectEventsForGeneration, type SelectableEvent } from "./select";
+
+/** 담임이 '기록 불러오기'로 체크한 개인 활동 1건 */
+export interface SelectablePersonalActivity {
+  activityId: string;
+  title: string;
+  /** 기재요령 표기. 하루면 "2026.03.05.", 기간이면 "2026.03.05.-2026.03.07." */
+  period: string;
+  content: string;
+}
 
 /** Gemini 재수정 호출 최대 횟수. 무한 재시도를 하지 않는다. */
 export const MAX_REPAIR_ATTEMPTS = 1;
@@ -22,8 +32,10 @@ export interface GenerateRecordInput {
   targetLength: number;
   selectionMode: SelectionMode;
   events: SelectableEvent[];
-  /** 기재요령 형식으로 완성된 임원 재임 표기 (예: 1학기 학급회장(2026.03.01.-2026.08.18.)) */
-  officerTerms?: string[];
+  /** 기재요령 형식 임원 표기 + 담임이 적은 한 줄 리더십 메모 */
+  officerTerms?: OfficerTermForRecord[];
+  /** 담당 교사가 따로 남긴 개인 활동 중 담임이 체크한 것 */
+  personalActivities?: SelectablePersonalActivity[];
   /** 본문에서 가려야 할 실명·학교명·교사명 등 (Gemini로 나가기 전 제거) */
   identifiersToRedact: string[];
 }
@@ -77,9 +89,14 @@ export function cleanDraft(raw: string): string {
 export async function generateStudentRecord(
   input: GenerateRecordInput,
 ): Promise<GenerateRecordOutput> {
+  const officerTerms = input.officerTerms ?? [];
+  const personalActivities = input.personalActivities ?? [];
+
+  // 임원·개인 활동이 이미 분량을 차지하므로 그만큼 활동을 덜 고른다.
   const used = selectEventsForGeneration(input.events, {
     mode: input.selectionMode,
     targetLength: input.targetLength,
+    reservedItems: officerTerms.length + personalActivities.length,
   });
 
   const payload = sanitizeRecordGenerationPayload({
@@ -96,7 +113,12 @@ export async function generateStudentRecord(
       hasStudentReflection: e.hasStudentReflection,
       teacherSelectionOrder: e.teacherSelectionOrder,
     })),
-    officerTerms: input.officerTerms ?? [],
+    officerTerms,
+    personalActivities: personalActivities.map((a) => ({
+      title: a.title,
+      activityDate: a.period,
+      content: a.content,
+    })),
     identifiersToRedact: input.identifiersToRedact,
   });
 
@@ -113,12 +135,21 @@ export async function generateStudentRecord(
     studentReflection: e.studentReflection,
     eventDate: e.eventDate,
   }));
+  const validationPersonal = payload.personalActivities.map((a) => ({
+    title: a.title,
+    activityDate: a.activityDate,
+    content: a.content,
+  }));
+  const officerLabels = payload.officerTerms.map((o) => o.term);
+  const officerNotes = payload.officerTerms.map((o) => o.leadership);
 
   let result = validateRecordDraft({
     text,
     targetLength: input.targetLength,
     events: validationEvents,
-    officerTerms: payload.officerTerms,
+    officerTerms: officerLabels,
+    officerNotes,
+    personalActivities: validationPersonal,
   });
 
   let attempts = 0;
@@ -136,7 +167,9 @@ export async function generateStudentRecord(
       text: repaired,
       targetLength: input.targetLength,
       events: validationEvents,
-      officerTerms: payload.officerTerms,
+      officerTerms: officerLabels,
+      officerNotes,
+      personalActivities: validationPersonal,
     });
     // 수정본이 더 나빠지면 원본을 유지한다.
     if (repairedResult.issues.length <= result.issues.length) {

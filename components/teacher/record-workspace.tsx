@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { Alert, Badge, Card } from "@/components/ui/surface";
@@ -23,6 +23,7 @@ import { CATEGORY_FULL_LABEL } from "@/lib/types";
 import { cn, countCharacters, formatDateShort } from "@/lib/utils";
 import { OfficerEditor } from "@/components/teacher/officer-editor";
 import type { OfficerTerm } from "@/lib/roster/officer";
+import type { PersonalActivityItem } from "@/lib/activities/personal";
 
 interface GenerateResponse {
   text: string;
@@ -105,6 +106,13 @@ export function RecordWorkspace({
   const [saving, setSaving] = useState(false);
   const [showPayload, setShowPayload] = useState(false);
 
+  // 담당 교사가 따로 남긴 개인 활동. 화면을 열 때마다 읽지 않고 '기록 불러오기'를 눌렀을 때만 읽는다.
+  const [personal, setPersonal] = useState<PersonalActivityItem[] | null>(null);
+  const [loadingPersonal, setLoadingPersonal] = useState(false);
+  const [selectedPersonal, setSelectedPersonal] = useState<string[]>(
+    () => savedRecord?.selectedPersonalIds ?? [],
+  );
+
   const orderOf = useMemo(() => {
     const map = new Map<string, number>();
     selected.forEach((id, i) => map.set(id, i + 1));
@@ -143,6 +151,54 @@ export function RecordWorkspace({
     }
   }
 
+  const loadPersonal = useCallback(async () => {
+    setLoadingPersonal(true);
+    setError(null);
+    try {
+      const res = await apiFetch<{ items: PersonalActivityItem[] }>(
+        `/api/teacher/personal-activities?rosterId=${encodeURIComponent(rosterId)}`,
+      );
+      setPersonal(res.items);
+      // 지워진 기록이 체크된 채로 남아 생성에서 오류가 나지 않게 한다.
+      const alive = new Set(res.items.map((a) => a.activityId));
+      setSelectedPersonal((prev) => prev.filter((id) => alive.has(id)));
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setLoadingPersonal(false);
+    }
+  }, [rosterId]);
+
+  // 지난번에 체크해 저장해 둔 개인 활동이 있으면, 버튼을 누르지 않아도 그대로 살려 둔다.
+  // (체크만 남고 목록이 비어 있으면 담임이 무엇을 골랐는지 알 수 없다)
+  const savedPersonalCount = savedRecord?.selectedPersonalIds?.length ?? 0;
+  useEffect(() => {
+    if (category !== "autonomous" || savedPersonalCount === 0) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await apiFetch<{ items: PersonalActivityItem[] }>(
+          `/api/teacher/personal-activities?rosterId=${encodeURIComponent(rosterId)}`,
+        );
+        if (!alive) return;
+        setPersonal(res.items);
+        const ids = new Set(res.items.map((a) => a.activityId));
+        setSelectedPersonal((prev) => prev.filter((id) => ids.has(id)));
+      } catch (err) {
+        if (alive) setError(errorMessage(err));
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [category, rosterId, savedPersonalCount]);
+
+  function togglePersonal(activityId: string) {
+    setSelectedPersonal((prev) =>
+      prev.includes(activityId) ? prev.filter((id) => id !== activityId) : [...prev, activityId],
+    );
+  }
+
   async function toggleAbsent(item: TeacherEventWithResponse) {
     const absent = !item.absent;
     setSavingAbsence(item.eventId);
@@ -179,6 +235,7 @@ export function RecordWorkspace({
           rosterId,
           category,
           selectedEventIds: selected,
+          selectedPersonalIds: selectedPersonal,
           selectionOrder,
           selectionMode: mode,
           targetLength,
@@ -208,6 +265,7 @@ export function RecordWorkspace({
           rosterId,
           category,
           selectedEventIds: selected,
+          selectedPersonalIds: selectedPersonal,
           selectionOrder,
           selectionMode: mode,
           usedEventIds: result?.usedEventIds ?? savedRecord?.usedEventIds ?? [],
@@ -411,9 +469,18 @@ export function RecordWorkspace({
 
       {/* 생성 패널 */}
       <section className="lg:sticky lg:top-6 lg:self-start">
-        {/* 임원 재임은 자치활동이므로 자율 영역에서만 입력받는다 */}
+        {/* 임원 재임·개인 활동은 자치활동이므로 자율 영역에서만 다룬다 */}
         {category === "autonomous" && (
-          <OfficerEditor rosterId={rosterId} initial={officerTerms} />
+          <>
+            <OfficerEditor rosterId={rosterId} initial={officerTerms} />
+            <PersonalActivityPicker
+              items={personal}
+              loading={loadingPersonal}
+              selected={selectedPersonal}
+              onLoad={loadPersonal}
+              onToggle={togglePersonal}
+            />
+          </>
         )}
 
         <Card className="p-5">
@@ -452,12 +519,15 @@ export function RecordWorkspace({
             </div>
           </fieldset>
 
-          <p className="mb-4 text-[13px] text-muted">선택한 활동 {selected.length}개</p>
+          <p className="mb-4 text-[13px] text-muted">
+            선택한 활동 {selected.length}개
+            {selectedPersonal.length > 0 && ` · 개인 활동 ${selectedPersonal.length}건`}
+          </p>
 
           <Button
             onClick={generate}
             loading={generating}
-            disabled={selected.length === 0 || generating}
+            disabled={(selected.length === 0 && selectedPersonal.length === 0) || generating}
             className="w-full"
           >
             {result ? "다시 생성" : "특기사항 생성"}
@@ -537,7 +607,7 @@ export function RecordWorkspace({
                 variant="secondary"
                 onClick={generate}
                 loading={generating}
-                disabled={selected.length === 0}
+                disabled={selected.length === 0 && selectedPersonal.length === 0}
               >
                 다시 생성
               </Button>
@@ -575,6 +645,76 @@ export function RecordWorkspace({
         )}
       </section>
     </div>
+  );
+}
+
+/**
+ * 담당 교사가 따로 남긴 개인 활동 불러오기.
+ *
+ * 도서관 행사·학생회 활동처럼 학급 일정에 없던 활동이다. 담임은 체크만 하고,
+ * 기록 자체는 고치지 못한다 — 원본은 활동을 맡은 선생님의 것이고, 담임은 이 기록으로
+ * 만들어진 특기사항을 직접 다듬을 책임이 있기 때문이다.
+ * 체크한 활동은 임원 다음, 학생이 쓴 활동보다 앞에 들어간다.
+ */
+function PersonalActivityPicker({
+  items,
+  loading,
+  selected,
+  onLoad,
+  onToggle,
+}: {
+  items: PersonalActivityItem[] | null;
+  loading: boolean;
+  selected: string[];
+  onLoad: () => void;
+  onToggle: (activityId: string) => void;
+}) {
+  return (
+    <Card className="mb-4 p-5">
+      <div className="mb-1 flex items-center justify-between">
+        <h2 className="text-[16px] font-medium text-ink">개인 활동 기록</h2>
+        {selected.length > 0 && <Badge tone="info">{selected.length}건 선택</Badge>}
+      </div>
+      <p className="mb-3 text-[13px] leading-[1.6] text-muted">
+        도서관·학생회 등 담당 선생님이 이 학생에게 따로 남긴 활동입니다. 체크하면 특기사항에
+        들어갑니다.
+      </p>
+
+      <Button size="sm" variant="secondary" loading={loading} onClick={onLoad}>
+        {items === null ? "기록 불러오기" : "다시 불러오기"}
+      </Button>
+
+      {items !== null && (
+        <div className="mt-3 space-y-1">
+          {items.length === 0 ? (
+            <p className="rounded-sm bg-surface-soft px-3 py-2 text-[13px] text-muted">
+              따로 기록된 개인 활동이 없습니다.
+            </p>
+          ) : (
+            items.map((a) => {
+              const id = `pa-${a.activityId}`;
+              return (
+                <label
+                  key={a.activityId}
+                  htmlFor={id}
+                  className="flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1.5 text-[14px]"
+                >
+                  <input
+                    id={id}
+                    type="checkbox"
+                    checked={selected.includes(a.activityId)}
+                    onChange={() => onToggle(a.activityId)}
+                    className="h-4 w-4 shrink-0 accent-[#181d26]"
+                  />
+                  <span className="shrink-0 text-[13px] text-muted">{a.period}</span>
+                  <span className="min-w-0 flex-1 truncate text-ink">{a.title}</span>
+                </label>
+              );
+            })
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
 

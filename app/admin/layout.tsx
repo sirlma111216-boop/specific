@@ -13,11 +13,20 @@ import { cn } from "@/lib/utils";
 /** 슈퍼관리자는 전부, 일정 관리자는 활동만. (서버도 같은 기준으로 막는다) */
 const NAV_ADMIN = [
   { href: "/admin", label: "대시보드", exact: true },
-  { href: "/admin/events", label: "활동", exact: false },
+  { href: "/admin/events", label: "활동 계획", exact: false },
+  { href: "/admin/entries", label: "활동 입력", exact: false },
   { href: "/admin/classes", label: "학급", exact: false },
   { href: "/admin/accounts", label: "계정", exact: false },
 ];
-const NAV_SCHEDULER = [{ href: "/admin/events", label: "활동", exact: false }];
+const NAV_SCHEDULER = [
+  { href: "/admin/events", label: "활동 계획", exact: false },
+  { href: "/admin/entries", label: "활동 입력", exact: false },
+];
+
+/** 일정 관리자가 쓸 수 있는 화면. 나머지 관리자 경로로 오면 활동 계획으로 보낸다. */
+function schedulerCanUse(pathname: string): boolean {
+  return pathname.startsWith("/admin/events") || pathname.startsWith("/admin/entries");
+}
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { configured, loading, profile, signOut } = useAuth();
@@ -35,15 +44,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       router.replace(profile.role === "teacher" ? "/teacher" : "/student");
       return;
     }
-    // 일정 관리자는 활동 화면만 쓴다. 다른 관리자 경로로 오면 활동으로 보낸다.
-    if (profile.role === "scheduler" && !pathname.startsWith("/admin/events")) {
+    // 일정 관리자는 활동 화면만 쓴다. 다른 관리자 경로로 오면 활동 계획으로 보낸다.
+    if (profile.role === "scheduler" && !schedulerCanUse(pathname)) {
       router.replace("/admin/events");
     }
   }, [loading, profile, pathname, router]);
 
   if (!configured) return <SetupNotice />;
   if (loading || !profile || !isStaff(profile.role)) return <Spinner />;
-  if (profile.role === "scheduler" && !pathname.startsWith("/admin/events")) return <Spinner />;
+  if (profile.role === "scheduler" && !schedulerCanUse(pathname)) return <Spinner />;
 
   const NAV = profile.role === "admin" ? NAV_ADMIN : NAV_SCHEDULER;
 

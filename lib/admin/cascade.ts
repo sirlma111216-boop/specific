@@ -19,6 +19,7 @@ export interface RosterDeletion {
   deletedResponses: number;
   deletedNotes: number;
   deletedRecords: number;
+  deletedPersonalActivities: number;
 }
 
 export async function deleteRosterEntry(rosterId: string): Promise<RosterDeletion> {
@@ -26,14 +27,22 @@ export async function deleteRosterEntry(rosterId: string): Promise<RosterDeletio
   const ref = db.collection(COL.roster).doc(rosterId);
   const snap = await ref.get();
   if (!snap.exists) {
-    return { removedAccount: false, deletedResponses: 0, deletedNotes: 0, deletedRecords: 0 };
+    return {
+      removedAccount: false,
+      deletedResponses: 0,
+      deletedNotes: 0,
+      deletedRecords: 0,
+      deletedPersonalActivities: 0,
+    };
   }
   const roster = snap.data() as RosterDoc;
 
-  const [responses, notes, records] = await Promise.all([
+  const [responses, notes, records, personalActivities] = await Promise.all([
     db.collection(COL.responses).where("rosterId", "==", rosterId).get(),
     db.collection(COL.notes).where("rosterId", "==", rosterId).get(),
     db.collection(COL.records).where("rosterId", "==", rosterId).get(),
+    // 담당 교사가 남긴 개인 활동도 이 학생에게 딸린 자료다. 남겨 두면 주인 없는 기록이 된다.
+    db.collection(COL.personalActivities).where("rosterId", "==", rosterId).get(),
   ]);
 
   const ops: Array<(b: FirebaseFirestore.WriteBatch) => void> = [];
@@ -51,6 +60,7 @@ export async function deleteRosterEntry(rosterId: string): Promise<RosterDeletio
   });
   notes.forEach((d) => ops.push((b) => b.delete(d.ref)));
   records.forEach((d) => ops.push((b) => b.delete(d.ref)));
+  personalActivities.forEach((d) => ops.push((b) => b.delete(d.ref)));
   ops.push((b) => b.delete(ref));
   ops.push((b) =>
     b.update(db.collection(COL.classes).doc(roster.classId), {
@@ -77,6 +87,7 @@ export async function deleteRosterEntry(rosterId: string): Promise<RosterDeletio
     deletedResponses: responses.size,
     deletedNotes: notes.size,
     deletedRecords: records.size,
+    deletedPersonalActivities: personalActivities.size,
   };
 }
 

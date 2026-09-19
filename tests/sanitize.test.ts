@@ -39,6 +39,7 @@ describe("개인정보 제거", () => {
       "category",
       "events",
       "officerTerms",
+      "personalActivities",
       "selectionMode",
       "targetLength",
     ]);

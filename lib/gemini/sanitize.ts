@@ -1,5 +1,10 @@
 import type { Category, SelectionMode } from "@/lib/types";
-import type { GeminiEventPayload, GeminiRequestPayload } from "./payload-types";
+import type {
+  GeminiEventPayload,
+  GeminiOfficerPayload,
+  GeminiPersonalActivityPayload,
+  GeminiRequestPayload,
+} from "./payload-types";
 
 const FORBIDDEN_KEYS = new Set([
   "name",
@@ -59,8 +64,10 @@ export interface SanitizeInput {
     hasStudentReflection: boolean;
     teacherSelectionOrder: number;
   }>;
-  /** 이미 기재요령 형식으로 완성된 임원 재임 표기 */
-  officerTerms?: string[];
+  /** 이미 기재요령 형식으로 완성된 임원 재임 표기 + 한 줄 리더십 메모 */
+  officerTerms?: Array<{ term: string; leadership: string }>;
+  /** 담당 교사가 따로 남긴 개인 활동 */
+  personalActivities?: Array<{ title: string; activityDate: string; content: string }>;
   /** 본문에서 가려야 할 실명·학교명·교사명 등 */
   identifiersToRedact: string[];
 }
@@ -84,13 +91,28 @@ export function sanitizeRecordGenerationPayload(input: SanitizeInput): GeminiReq
     teacherSelectionOrder: e.teacherSelectionOrder,
   }));
 
+  // 임원 표기·개인 활동에도 혹시 모를 식별자가 섞이지 않게 같은 마스킹을 통과시킨다.
+  // (개인 활동은 담당 교사가 자유롭게 적는 칸이라 이름이 들어갈 여지가 가장 크다)
+  const officerTerms: GeminiOfficerPayload[] = (input.officerTerms ?? []).map((t) => ({
+    term: redactKnownIdentifiers(t.term, identifiers),
+    leadership: redactKnownIdentifiers(t.leadership ?? "", identifiers),
+  }));
+
+  const personalActivities: GeminiPersonalActivityPayload[] = (input.personalActivities ?? []).map(
+    (a) => ({
+      title: redactKnownIdentifiers(a.title, identifiers),
+      activityDate: a.activityDate,
+      content: redactKnownIdentifiers(a.content ?? "", identifiers),
+    }),
+  );
+
   const payload: GeminiRequestPayload = stripForbiddenKeys({
     category: input.category,
     targetLength: input.targetLength,
     selectionMode: input.selectionMode,
     events,
-    // 임원 표기에도 혹시 모를 식별자가 섞이지 않게 같은 마스킹을 통과시킨다.
-    officerTerms: (input.officerTerms ?? []).map((t) => redactKnownIdentifiers(t, identifiers)),
+    officerTerms,
+    personalActivities,
   });
 
   assertNoPersonalInfo(payload, identifiers);
