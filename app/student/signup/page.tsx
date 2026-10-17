@@ -14,6 +14,7 @@ import { useAuth } from "@/lib/client/auth-context";
 import { useRegisteredClasses } from "@/lib/client/use-registered-classes";
 import { classNumbersOf, gradesOf } from "@/lib/roster/registered-classes";
 import { clientAuth } from "@/lib/firebase/client";
+import { SCHOOL_EMAIL_DOMAIN, suggestSchoolEmail } from "@/lib/school";
 
 const THIS_YEAR = String(new Date().getFullYear());
 
@@ -63,6 +64,10 @@ export default function StudentSignupPage() {
         : ""
     : form.classNumber;
 
+  // 치는 도중의 'kh.' 같은 미완성 주소에 경고가 깜빡이지 않도록, 칸을 벗어난 뒤에만 본다.
+  const [emailDone, setEmailDone] = useState(false);
+  const suggestion = emailDone ? suggestSchoolEmail(form.email) : null;
+
   if (!configured) return <SetupNotice />;
 
   function update(key: keyof typeof form) {
@@ -109,7 +114,12 @@ export default function StudentSignupPage() {
       description="담임 선생님이 미리 등록한 우리 반 명단과 연결됩니다. 번호와 이름은 명단에 있는 그대로 입력해주세요."
     >
       <form onSubmit={onSubmit} noValidate>
-        <Field label="이메일" htmlFor="email">
+        <Field
+          label="이메일(아이디)"
+          htmlFor="email"
+          hint={suggestion ? undefined : `학교 아이디는 '@${SCHOOL_EMAIL_DOMAIN}'로 끝납니다.`}
+          error={suggestion ? `'@${SCHOOL_EMAIL_DOMAIN}'를 잘못 입력한 것 같습니다.` : undefined}
+        >
           <Input
             id="email"
             type="email"
@@ -117,8 +127,20 @@ export default function StudentSignupPage() {
             inputMode="email"
             value={form.email}
             onChange={update("email")}
+            onFocus={() => setEmailDone(false)}
+            onBlur={() => setEmailDone(true)}
             required
           />
+          {/* 가입 뒤에야 로그인이 안 되는 것으로 드러나므로, 쓰는 자리에서 바로 알려 준다 */}
+          {suggestion && (
+            <button
+              type="button"
+              onClick={() => setForm((prev) => ({ ...prev, email: suggestion }))}
+              className="mt-2 text-[13px] text-link underline underline-offset-2"
+            >
+              {suggestion} 로 고치기
+            </button>
+          )}
         </Field>
         <Field label="비밀번호" htmlFor="password" hint="6자 이상">
           <Input

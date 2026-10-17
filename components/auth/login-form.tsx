@@ -11,6 +11,7 @@ import { Field, Input } from "@/components/ui/field";
 import { Alert } from "@/components/ui/surface";
 import { translateFirebaseAuthError } from "./auth-shell";
 import { isStaff, ROLE_LABEL, type Role } from "@/lib/types";
+import { SCHOOL_EMAIL_DOMAIN, suggestSchoolEmail } from "@/lib/school";
 
 export function LoginForm({ role, redirectTo }: { role: Role; redirectTo: string }) {
   const router = useRouter();
@@ -19,6 +20,9 @@ export function LoginForm({ role, redirectTo }: { role: Role; redirectTo: string
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // 치는 도중의 'kh.' 같은 미완성 주소에 경고가 깜빡이지 않도록, 칸을 벗어난 뒤에만 본다.
+  const [emailDone, setEmailDone] = useState(false);
+  const suggestion = emailDone ? suggestSchoolEmail(email) : null;
 
   /**
    * 관리자는 회원가입을 하지 않고 지정된 계정으로만 들어온다.
@@ -89,9 +93,24 @@ export function LoginForm({ role, redirectTo }: { role: Role; redirectTo: string
           inputMode="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          onFocus={() => setEmailDone(false)}
+          onBlur={() => setEmailDone(true)}
           placeholder="name@school.kr"
           required
         />
+        {/* 학교 아이디 뒷부분을 잘못 치면 '계정 없음'만 떠서 무엇이 틀렸는지 모른다 */}
+        {suggestion && (
+          <p className="mt-1.5 text-[13px] text-coral">
+            학교 아이디는 &lsquo;@{SCHOOL_EMAIL_DOMAIN}&rsquo;로 끝납니다.{" "}
+            <button
+              type="button"
+              onClick={() => setEmail(suggestion)}
+              className="text-link underline underline-offset-2"
+            >
+              {suggestion} 로 고치기
+            </button>
+          </p>
+        )}
       </Field>
       <Field label="비밀번호" htmlFor="password">
         <Input

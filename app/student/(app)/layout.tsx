@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/client/auth-context";
 import { LabbitoryLink } from "@/components/ui/labbitory-link";
 import { SetupNotice } from "@/components/ui/setup-notice";
 import { Spinner } from "@/components/ui/surface";
+import { formatClassName } from "@/lib/utils";
 
 export default function StudentAppLayout({ children }: { children: React.ReactNode }) {
   const { configured, loading, profile, signOut } = useAuth();
@@ -60,6 +61,35 @@ export default function StudentAppLayout({ children }: { children: React.ReactNo
           </div>
         </div>
       </header>
+
+      {/*
+        지금 로그인한 사람이 누구인지 늘 보이게 한다.
+        한 대의 기기를 여럿이 쓰다 앞사람 계정이 남아 있으면, 쓴 글이 그 사람 기록으로 저장된다.
+        실제로 그렇게 들어간 기록이 있어, 담임 화면에서는 제출이 안 된 것처럼 보였다.
+      */}
+      {profile.student && (
+        <div className="border-b border-hairline bg-cream">
+          <p className="prose-ko mx-auto max-w-[640px] px-5 py-2.5 text-[13px] text-ink">
+            <strong className="font-medium">
+              {profile.klass ? `${formatClassName(profile.klass.grade, profile.klass.classNumber)} ` : ""}
+              {profile.student.studentNumber}번 {profile.student.studentName}
+            </strong>
+            님으로 로그인했습니다. 내 이름이 아니면{" "}
+            <button
+              type="button"
+              onClick={async () => {
+                await signOut();
+                router.replace("/student/login");
+              }}
+              className="underline underline-offset-2"
+            >
+              로그아웃
+            </button>
+            한 뒤 내 아이디로 다시 들어와 주세요.
+          </p>
+        </div>
+      )}
+
       <div className="mx-auto max-w-[640px] px-5 py-8">{children}</div>
     </div>
   );

@@ -11,6 +11,20 @@ export function countCharacters(text: string): number {
   return Array.from(text ?? "").length;
 }
 
+/**
+ * 특기사항 본문을 한 덩어리 글로 만든다.
+ *
+ * 생기부 특기사항은 문단을 나누지 않고 이어 쓰며, 항목과 항목 사이도 공백 한 칸이다.
+ * 모델이 활동마다 줄을 바꾸거나 빈 줄을 넣어 보내는 일이 있어, 줄바꿈은 모두 공백 한 칸으로
+ * 합친다. 교사가 붙여 넣은 글에 줄바꿈이 섞여 있을 때도 저장 단계에서 같은 규칙을 적용한다.
+ */
+export function singleParagraph(text: string): string {
+  return (text ?? "")
+    .replace(/\s*\n\s*/g, " ")
+    .replace(/ {2,}/g, " ")
+    .trim();
+}
+
 /** 한국 표준시 기준 오늘 날짜(YYYY-MM-DD). 서버가 UTC여도 학교 날짜와 어긋나지 않게 한다. */
 export function todayInKST(now: Date = new Date()): string {
   const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);

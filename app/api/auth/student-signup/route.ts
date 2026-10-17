@@ -3,7 +3,7 @@ import { badRequest } from "@/lib/api-error";
 import { readJson, route } from "@/lib/route-helpers";
 import { invalidateAdminCache } from "@/lib/server-cache";
 import { buildClassMatchKey, normalizeStudentName } from "@/lib/roster/normalize";
-import { SCHOOL_NAME } from "@/lib/school";
+import { SCHOOL_EMAIL_DOMAIN, SCHOOL_NAME, suggestSchoolEmail } from "@/lib/school";
 import { formatClassName } from "@/lib/utils";
 import type { ClassDoc, RosterDoc, UserDoc } from "@/lib/types";
 
@@ -59,6 +59,15 @@ export async function POST(req: Request) {
     const studentName = (body.studentName ?? "").trim();
 
     if (!email || !password) throw badRequest("이메일과 비밀번호를 입력해주세요.");
+    // 학교 아이디 뒷부분 오타(kh.ms.mr 등)는 명단 대조를 통과해 버려서, 가입 뒤에야
+    // 로그인이 안 되는 것으로 드러난다. 여기서 먼저 막고 맞는 주소를 알려 준다.
+    const suggested = suggestSchoolEmail(email);
+    if (suggested) {
+      throw badRequest(
+        `아이디를 다시 확인해주세요. 학교 아이디는 '@${SCHOOL_EMAIL_DOMAIN}'로 끝납니다. 혹시 ${suggested} 인가요?`,
+        "school_email_typo",
+      );
+    }
     if (password.length < 6) throw badRequest("비밀번호는 6자 이상이어야 합니다.");
     if (!Number.isInteger(schoolYear) || schoolYear < 2000 || schoolYear > 2100) {
       throw badRequest("학년도를 올바르게 입력해주세요. (예: 2026)");

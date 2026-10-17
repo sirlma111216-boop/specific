@@ -2,7 +2,7 @@ import { adminDb, COL } from "@/lib/firebase/admin";
 import { badRequest, notFound } from "@/lib/api-error";
 import { requireAdmin } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
-import { countCharacters } from "@/lib/utils";
+import { countCharacters, singleParagraph } from "@/lib/utils";
 import type { StudentRecordDoc } from "@/lib/types";
 
 interface PatchBody {
@@ -22,7 +22,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ record
     await requireAdmin(req);
     const { recordId } = await params;
     const body = await readJson<PatchBody>(req);
-    const editedText = (body.editedText ?? "").trim();
+    // 담임 화면과 같은 규칙. 특기사항은 문단을 나누지 않는 한 덩어리 글이다.
+    const editedText = singleParagraph(body.editedText ?? "");
     if (!editedText) throw badRequest("내용을 입력해주세요. 비우려면 삭제를 쓰세요.");
 
     const { ref } = await load(recordId);

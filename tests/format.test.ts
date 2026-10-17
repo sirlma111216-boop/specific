@@ -5,7 +5,28 @@ import {
   formatGrade,
   formatClassNumber,
   formatSchoolYear,
+  singleParagraph,
 } from "@/lib/utils";
+
+describe("특기사항 본문 한 덩어리로 만들기", () => {
+  it("빈 줄과 줄바꿈을 공백 한 칸으로 합친다", () => {
+    expect(singleParagraph("가에 참여함.\n\n나에 참여함.")).toBe("가에 참여함. 나에 참여함.");
+    expect(singleParagraph("가에 참여함.\n나에 참여함.")).toBe("가에 참여함. 나에 참여함.");
+  });
+
+  it("이어진 공백도 한 칸으로 줄인다", () => {
+    expect(singleParagraph("가에 참여함.    나에 참여함.")).toBe("가에 참여함. 나에 참여함.");
+  });
+
+  it("앞뒤 공백을 정리한다", () => {
+    expect(singleParagraph("  가에 참여함.  \n")).toBe("가에 참여함.");
+  });
+
+  it("이미 한 줄이면 그대로 둔다", () => {
+    const text = "학교폭력예방교육(2026.03.04.)에 참여하는 모습을 보임.";
+    expect(singleParagraph(text)).toBe(text);
+  });
+});
 
 describe("학급 표기", () => {
   it("숫자만 입력했으면 단위를 붙인다", () => {

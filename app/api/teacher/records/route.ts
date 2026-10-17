@@ -2,7 +2,7 @@ import { adminDb, COL, recordId } from "@/lib/firebase/admin";
 import { badRequest, notFound } from "@/lib/api-error";
 import { requireTeacherWithClass } from "@/lib/auth/server";
 import { readJson, route } from "@/lib/route-helpers";
-import { countCharacters } from "@/lib/utils";
+import { countCharacters, singleParagraph } from "@/lib/utils";
 import type { Category, RosterDoc, SelectionMode, StudentRecordDoc } from "@/lib/types";
 
 interface Body {
@@ -31,8 +31,9 @@ export async function POST(req: Request) {
 
     const rosterId = (body.rosterId ?? "").trim();
     const category = body.category as Category;
-    const editedText = (body.editedText ?? "").trim();
-    const generatedText = (body.generatedText ?? "").trim();
+    // 특기사항은 한 덩어리 글이다. 교사가 고치며 줄바꿈이 섞여도 저장할 때 한 칸으로 합친다.
+    const editedText = singleParagraph(body.editedText ?? "");
+    const generatedText = singleParagraph(body.generatedText ?? "");
 
     if (!rosterId) throw badRequest("학생을 선택해주세요.");
     if (!CATEGORIES.includes(category)) throw badRequest("활동 영역을 선택해주세요.");

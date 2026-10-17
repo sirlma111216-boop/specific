@@ -10,7 +10,7 @@ import {
   validateRecordDraft,
   type ValidationIssue,
 } from "@/lib/record-validator/validate";
-import { countCharacters, formatRecordDate } from "@/lib/utils";
+import { countCharacters, formatRecordDate, singleParagraph } from "@/lib/utils";
 import type { Category, SelectionMode } from "@/lib/types";
 import type { OfficerTermForRecord } from "@/lib/roster/officer";
 import { selectEventsForGeneration, type SelectableEvent } from "./select";
@@ -74,13 +74,16 @@ export function cleanDraft(raw: string): string {
   text = text.replace(/^(특기사항|초안|결과)\s*[:：]\s*/, "");
   text = text.replace(/^["'“”『「]+/, "").replace(/["'“”』」]+$/, "");
   text = text.replace(/^[-•*]\s+/gm, "");
+  // 활동마다 줄을 바꾸거나 빈 줄을 넣어 보내는 경우가 있다. 특기사항은 한 덩어리 글이므로
+  // 줄바꿈을 공백 한 칸으로 합친다. (목록 기호를 떼어낸 다음에 해야 한다)
+  text = singleParagraph(text);
   // 전각 → ASCII (？ ！ （ ） ０-９ Ａ-Ｚ 등)
   text = text.replace(FULLWIDTH_ASCII, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
   text = text.replace(/　/g, " ");
   // 한자만 든 괄호는 통째로 뺀다. "진로적성검사(適性檢査)(2026.03.20.)" → "진로적성검사(2026.03.20.)"
   text = text.replace(HANJA_PAREN, "");
   text = text.replace(/\s+([,.)])/g, "$1");
-  return text.replace(/[ \t]+\n/g, "\n").trim();
+  return text.trim();
 }
 
 /**

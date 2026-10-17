@@ -122,8 +122,9 @@ export function buildSystemInstruction(category: Category, examples: string): st
 - 개별적 특성이 드러나지 않는 단순 활동 나열은 지양한다.
 - 정량적 표현이 필요하면 횟수·시간으로 쓴다.
 
-[출력 형식]
+[출력 형식 — 반드시 지킬 것]
 - 특기사항 본문만 출력한다. 제목, 머리말, 목록 기호, 따옴표, 부연 설명을 붙이지 않는다.
+- ${ONE_PARAGRAPH_RULE}
 - 학생 이름을 쓰지 않는다. 주어 없이 서술한다.`;
 
   if (!examples.trim()) return base;
@@ -133,9 +134,21 @@ export function buildSystemInstruction(category: Category, examples: string): st
 [실제 생활기록부 특기사항 예시 — 문체의 최우선 기준]
 아래는 실제 학교에서 쓰인 특기사항 예시다. 문장 길이, 종결어미, 어휘 수준, 교사 관찰자 표현, 문장 연결 방식을 이 예시에 맞춰라.
 위의 일반 규칙과 예시의 표현이 다르면 예시 쪽을 따른다.
+단, **줄 나눔은 예외**다. 예시가 활동마다 줄을 바꾸거나 빈 줄로 나뉘어 보여도 그 모양은 따르지 않는다.
+결과는 언제나 줄바꿈 없는 한 문단이다. 한 활동의 마지막 문장이 끝나면 공백 한 칸 뒤 바로 다음 활동 문장을 잇는다.
 
 ${examples}`;
 }
+
+/**
+ * 한 문단 규칙. 시스템 지시·생성 요청·수정 요청에 똑같이 들어간다.
+ *
+ * 문체 예시가 활동마다 빈 줄로 나뉘어 있었고, 예시를 일반 규칙보다 우선하라고 시켰더니
+ * 결과도 활동마다 줄이 띄워져 나왔다. 한 번만 말해서는 예시에 밀리므로 요청 끝에서 다시 못 박는다.
+ * (모델이 그래도 줄을 바꾸면 cleanDraft 가 공백 한 칸으로 합친다)
+ */
+const ONE_PARAGRAPH_RULE =
+  "**줄바꿈 없이 한 문단으로** 출력한다. 활동마다 줄을 바꾸거나 빈 줄을 넣지 않는다. 한 활동이 끝나면 마침표와 공백 한 칸 뒤 바로 다음 문장을 잇는다.";
 
 export function buildUserPrompt(payload: GeminiRequestPayload): string {
   const reflected = payload.events.filter((e) => e.hasStudentReflection);
@@ -169,7 +182,7 @@ export function buildUserPrompt(payload: GeminiRequestPayload): string {
   lines.push(
     "teacherSelectionOrder는 교사가 체크한 순서다. 학생 기록이 있는 활동을 먼저 배치하고, 그 안에서 이 순서를 참고하라.",
   );
-  lines.push("특기사항 본문만 출력하라.");
+  lines.push(`특기사항 본문만 출력하라. ${ONE_PARAGRAPH_RULE}`);
   return lines.join("\n");
 }
 
@@ -187,6 +200,6 @@ export function buildRepairPrompt(
     "[원본 활동 자료 JSON]",
     JSON.stringify(payload, null, 2),
     "",
-    "수정된 특기사항 본문만 출력하라.",
+    `수정된 특기사항 본문만 출력하라. ${ONE_PARAGRAPH_RULE}`,
   ].join("\n");
 }

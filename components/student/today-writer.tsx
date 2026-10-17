@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/surface";
 import { FormAnswerFields } from "@/components/student/form-answer";
 import { apiFetch, errorMessage } from "@/lib/client/api";
+import { useAuth } from "@/lib/client/auth-context";
 import { resolveForm, validateAnswers, type FormAnswers } from "@/lib/forms/schema";
 import { CATEGORY_FULL_LABEL, type StudentEventItem } from "@/lib/types";
 import { formatDateDots } from "@/lib/utils";
@@ -16,6 +17,11 @@ import { formatDateDots } from "@/lib/utils";
  */
 export function TodayWriter({ today, pending }: { today: string; pending: StudentEventItem[] }) {
   const router = useRouter();
+  const { profile } = useAuth();
+  // 저장되는 이름을 쓰기 직전에 한 번 더 보여 준다. 남의 계정으로 쓰는 일을 막기 위함이다.
+  const owner = profile?.student
+    ? `${profile.student.studentNumber}번 ${profile.student.studentName}`
+    : null;
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<FormAnswers>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -108,7 +114,9 @@ export function TodayWriter({ today, pending }: { today: string; pending: Studen
 
       {savedStep ? (
         <div className="mt-8">
-          <Alert tone="success">기록을 저장했습니다.</Alert>
+          <Alert tone="success">
+            {owner ? `${owner} 이름으로 기록을 저장했습니다.` : "기록을 저장했습니다."}
+          </Alert>
           <Button onClick={next} className="mt-4 w-full">
             {index + 1 < total ? "다음 활동 작성하기" : "내 기록 보기"}
           </Button>
@@ -121,7 +129,13 @@ export function TodayWriter({ today, pending }: { today: string; pending: Studen
             errors={fieldErrors}
             onChange={setAnswer}
           />
-          <Button onClick={save} loading={saving} className="mt-6 w-full">
+          {owner && (
+            <p className="mt-6 rounded-md bg-surface-soft px-4 py-3 text-center text-[14px] text-body">
+              이 기록은 <strong className="font-medium text-ink">{owner}</strong> 이름으로
+              저장됩니다.
+            </p>
+          )}
+          <Button onClick={save} loading={saving} className="mt-3 w-full">
             기록 저장하기
           </Button>
         </div>
